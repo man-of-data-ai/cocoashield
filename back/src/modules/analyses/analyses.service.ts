@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { Queue } from 'bullmq';
 import * as path from 'path';
+import { ConfigService } from '../../libs/infrastructure/config/config.service';
 import { ParcelStatus } from '../parcels/entities/parcel.entity';
 import { ParcelsService } from '../parcels/parcels.service';
 import { IMAGE_INFERENCE_QUEUE, ImageInferenceJob } from './analyses.constants';
@@ -20,15 +21,21 @@ import {
   AnalysisResult,
   AnalysisStatus,
 } from './entities/analysis.entity';
+import { PendingImport } from './entities/pending-import.entity';
+import { ImageGeoService } from './image-geo.service';
 import { AnalysisImageRepository } from './repositories/analysis-image.repository';
 import { AnalysisRepository } from './repositories/analysis.repository';
+import { PendingImportRepository } from './repositories/pending-import.repository';
 
 @Injectable()
 export class AnalysesService {
   constructor(
     private readonly analysisRepository: AnalysisRepository,
     private readonly analysisImageRepository: AnalysisImageRepository,
+    private readonly pendingImportRepository: PendingImportRepository,
     private readonly parcelsService: ParcelsService,
+    private readonly imageGeoService: ImageGeoService,
+    private readonly configService: ConfigService,
     @InjectQueue(IMAGE_INFERENCE_QUEUE)
     private readonly imageInferenceQueue: Queue<ImageInferenceJob>,
   ) {}
@@ -64,6 +71,7 @@ export class AnalysesService {
       const meta = imageMetas[index];
       const isPreClassified =
         meta?.source === AnalysisImageSource.MOBILE && meta.result;
+      const gps = await this.imageGeoService.extractGps(file.path);
 
       const image = await this.analysisImageRepository.create({
         analysisId: analysis.id,
@@ -74,6 +82,8 @@ export class AnalysesService {
           : AnalysisImageStatus.PENDING,
         result: isPreClassified ? meta.result! : null,
         confidence: isPreClassified ? (meta.confidence ?? null) : null,
+        latitude: gps?.latitude ?? null,
+        longitude: gps?.longitude ?? null,
       });
 
       if (!isPreClassified) {
@@ -96,6 +106,21 @@ export class AnalysesService {
     }
 
     return this.findOne(analysis.id);
+  }
+
+  async createImport(
+    parcelId: string,
+    ownerId: string,
+    file: Express.Multer.File,
+  ): Promise<PendingImport> {
+    await this.parcelsService.findOneForOwner(parcelId, ownerId);
+
+    return this.pendingImportRepository.create({
+      parcelId,
+      filePath: path.basename(file.path),
+      originalName: file.originalname,
+      mimeType: file.mimetype,
+    });
   }
 
   async findOne(id: string): Promise<Analysis> {
@@ -122,6 +147,25 @@ export class AnalysesService {
     await this.findOneForOwner(id, ownerId);
     await this.analysisRepository.update(id, { notes });
     return this.findOne(id);
+  }
+
+  /**
+   * Resolves an AnalysisImage's absolute file path on disk, after checking
+   * that it belongs (via analysis -> parcel) to the caller.
+   */
+  async getImageFilePathForOwner(
+    imageId: string,
+    ownerId: string,
+  ): Promise<{ absolutePath: string; filename: string }> {
+    const image = await this.analysisImageRepository.findByIdWithOwner(imageId);
+    if (!image || image.analysis.parcel.ownerId !== ownerId) {
+      throw new NotFoundException('Image not found');
+    }
+
+    return {
+      absolutePath: path.join(this.configService.uploadsDir, image.filePath),
+      filename: image.filePath,
+    };
   }
 
   /** Called by the ImageInferenceProcessor after each image is processed. */

@@ -6,12 +6,15 @@ import {
   Param,
   Patch,
   Post,
+  StreamableFile,
+  UploadedFile,
   UploadedFiles,
   UseInterceptors,
 } from '@nestjs/common';
-import { FilesInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { Session } from '@thallesp/nestjs-better-auth';
 import type { UserSession } from '@thallesp/nestjs-better-auth';
+import { createReadStream } from 'fs';
 import { routes } from '../../routes';
 import { AnalysesService } from './analyses.service';
 import { AnalysisImageMeta } from './dtos/create-analysis.dto';
@@ -36,6 +39,19 @@ export class ParcelAnalysesController {
       images,
       results,
     );
+  }
+
+  @Post(routes.parcels.imports)
+  @UseInterceptors(FileInterceptor('file'))
+  createImport(
+    @Session() session: UserSession,
+    @Param('id') parcelId: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file) {
+      throw new BadRequestException('A file is required');
+    }
+    return this.analysesService.createImport(parcelId, session.user.id, file);
   }
 
   private parseResults(resultsJson?: string): AnalysisImageMeta[] {
@@ -70,5 +86,22 @@ export class AnalysesController {
     @Body() dto: UpdateAnalysisNotesDto,
   ) {
     return this.analysesService.updateNotes(id, session.user.id, dto.notes);
+  }
+}
+
+@Controller(`${routes.version}${routes.analysisImages.root}`)
+export class AnalysisImagesController {
+  constructor(private readonly analysesService: AnalysesService) {}
+
+  @Get(routes.analysisImages.file)
+  async getFile(
+    @Session() session: UserSession,
+    @Param('id') id: string,
+  ): Promise<StreamableFile> {
+    const { absolutePath, filename } =
+      await this.analysesService.getImageFilePathForOwner(id, session.user.id);
+    return new StreamableFile(createReadStream(absolutePath), {
+      disposition: `inline; filename="${filename}"`,
+    });
   }
 }

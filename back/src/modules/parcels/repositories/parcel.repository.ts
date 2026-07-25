@@ -24,8 +24,11 @@ export class ParcelRepository {
   findByIdAndOwner(id: string, ownerId: string): Promise<Parcel | null> {
     return this.repository.findOne({
       where: { id, ownerId },
-      relations: { analyses: { images: true } },
-      order: { analyses: { createdAt: 'DESC' } },
+      relations: { analyses: { images: true }, imports: true },
+      order: {
+        analyses: { createdAt: 'DESC' },
+        imports: { createdAt: 'DESC' },
+      },
     });
   }
 

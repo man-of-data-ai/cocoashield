@@ -21,11 +21,17 @@ const parcels = {
   root: '/parcels',
   byId: '/:id',
   analyses: '/:id/analyses',
+  imports: '/:id/imports',
 };
 
 const analyses = {
   root: '/analyses',
   byId: '/:id',
+};
+
+const analysisImages = {
+  root: '/analyses-images',
+  file: '/:id/file',
 };
 
 export const routes = {
@@ -34,4 +40,5 @@ export const routes = {
   users,
   parcels,
   analyses,
+  analysisImages,
 };

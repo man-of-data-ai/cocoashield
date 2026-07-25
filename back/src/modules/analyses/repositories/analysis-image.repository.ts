@@ -18,6 +18,13 @@ export class AnalysisImageRepository {
     return this.repository.findOne({ where: { id } });
   }
 
+  findByIdWithOwner(id: string): Promise<AnalysisImage | null> {
+    return this.repository.findOne({
+      where: { id },
+      relations: { analysis: { parcel: true } },
+    });
+  }
+
   async update(id: string, data: Partial<AnalysisImage>): Promise<void> {
     await this.repository.update(id, data);
   }

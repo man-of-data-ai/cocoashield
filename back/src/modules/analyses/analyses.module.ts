@@ -12,19 +12,23 @@ import { ParcelsModule } from '../parcels/parcels.module';
 import { IMAGE_INFERENCE_QUEUE } from './analyses.constants';
 import {
   AnalysesController,
+  AnalysisImagesController,
   ParcelAnalysesController,
 } from './analyses.controller';
 import { AnalysesService } from './analyses.service';
 import { AnalysisImage } from './entities/analysis-image.entity';
 import { Analysis } from './entities/analysis.entity';
+import { PendingImport } from './entities/pending-import.entity';
+import { ImageGeoService } from './image-geo.service';
 import { ImageInferenceProcessor } from './image-inference.processor';
 import { ImageInferenceService } from './image-inference.service';
 import { AnalysisImageRepository } from './repositories/analysis-image.repository';
 import { AnalysisRepository } from './repositories/analysis.repository';
+import { PendingImportRepository } from './repositories/pending-import.repository';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Analysis, AnalysisImage]),
+    TypeOrmModule.forFeature([Analysis, AnalysisImage, PendingImport]),
     ParcelsModule,
     BullModule.registerQueue({ name: IMAGE_INFERENCE_QUEUE }),
     MulterModule.registerAsync({
@@ -43,11 +47,17 @@ import { AnalysisRepository } from './repositories/analysis.repository';
       },
     }),
   ],
-  controllers: [ParcelAnalysesController, AnalysesController],
+  controllers: [
+    ParcelAnalysesController,
+    AnalysesController,
+    AnalysisImagesController,
+  ],
   providers: [
     AnalysesService,
     AnalysisRepository,
     AnalysisImageRepository,
+    PendingImportRepository,
+    ImageGeoService,
     ImageInferenceService,
     ImageInferenceProcessor,
   ],

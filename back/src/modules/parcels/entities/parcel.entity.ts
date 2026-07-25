@@ -1,6 +1,7 @@
 import { Column, Entity, Index, OneToMany } from 'typeorm';
 import { RestEntity } from '../../../libs/infrastructure/persistence/entities/rest.entity';
 import { Analysis } from '../../analyses/entities/analysis.entity';
+import { PendingImport } from '../../analyses/entities/pending-import.entity';
 
 export enum ParcelStatus {
   NOT_ANALYZED = 'not_analyzed',
@@ -39,4 +40,7 @@ export class Parcel extends RestEntity {
 
   @OneToMany(() => Analysis, (analysis) => analysis.parcel)
   analyses: Analysis[];
+
+  @OneToMany(() => PendingImport, (pendingImport) => pendingImport.parcel)
+  imports: PendingImport[];
 }
