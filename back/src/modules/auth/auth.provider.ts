@@ -10,6 +10,7 @@ export function createAuth(config: ConfigService) {
     secret: config.betterAuthSecret,
     baseURL: config.betterAuthUrl,
     basePath: routes.betterAuthBasePath,
+    trustedOrigins: [config.webUrl],
     emailAndPassword: {
       enabled: true,
     },

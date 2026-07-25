@@ -1,14 +1,21 @@
 /**
- * Service d'authentification.
- *
- * Point d'entrée unique pour toute opération liée à l'auth. Les composants
- * et hooks ne doivent jamais appeler `fetch` directement : ils passent par
- * ce service, ce qui permet de brancher une vraie API REST externe plus
- * tard en ne modifiant que ce fichier.
+ * Service d'authentification. Appelle directement les endpoints better-auth
+ * du backend (proxifiés en same-origin via next.config.ts `rewrites`), afin
+ * que le cookie de session httpOnly reste utilisable sans configuration CORS.
  */
 
 import { apiRequest } from "@/lib/api-client";
-import type { AuthResponse, LoginCredentials, User } from "@/types/auth";
+import type {
+  AuthResponse,
+  LoginCredentials,
+  RegisterCredentials,
+  User,
+} from "@/types/auth";
+
+type SessionResponse = {
+  session: unknown;
+  user: User;
+} | null;
 
 export const authService = {
   /**
@@ -16,7 +23,17 @@ export const authService = {
    * dans un cookie httpOnly ; il n'est jamais manipulé côté client.
    */
   async login(credentials: LoginCredentials): Promise<User> {
-    const data = await apiRequest<AuthResponse>("/api/auth/login", {
+    const data = await apiRequest<AuthResponse>("/v1/auth/sign-in/email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(credentials),
+    });
+    return data.user;
+  },
+
+  /** Crée le compte (avec vérification de confirmation de mot de passe côté serveur). */
+  async register(credentials: RegisterCredentials): Promise<User> {
+    const data = await apiRequest<AuthResponse>("/v1/users/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(credentials),
@@ -26,7 +43,7 @@ export const authService = {
 
   /** Invalide la session courante. */
   async logout(): Promise<void> {
-    await apiRequest<{ success: boolean }>("/api/auth/logout", {
+    await apiRequest<{ success: boolean }>("/v1/auth/sign-out", {
       method: "POST",
     });
   },
@@ -38,8 +55,8 @@ export const authService = {
    */
   async getCurrentUser(): Promise<User | null> {
     try {
-      const data = await apiRequest<AuthResponse>("/api/auth/me");
-      return data.user;
+      const data = await apiRequest<SessionResponse>("/v1/auth/get-session");
+      return data?.user ?? null;
     } catch {
       return null;
     }

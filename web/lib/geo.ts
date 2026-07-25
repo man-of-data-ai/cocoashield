@@ -12,7 +12,7 @@
  */
 
 import { EARTH_RADIUS_METERS } from "@/lib/constants";
-import type { ParcelGeometry, ParcelMetrics } from "@/types/parcel";
+import type { ParcelBoundary, ParcelMetrics } from "@/types/parcel";
 
 type Ring = number[][]; // [ [lng, lat], ... ]
 type PlanarPoint = { x: number; y: number };
@@ -95,7 +95,7 @@ function ringCentroid(ring: Ring): { lat: number; long: number } {
  * éventuels trous (anneaux suivants) sont ignorés, un cas rare pour une
  * parcelle cadastrale simple.
  */
-export function computeParcelMetrics(geometry: ParcelGeometry): ParcelMetrics {
+export function computeParcelMetrics(geometry: ParcelBoundary): ParcelMetrics {
   const outerRing = geometry.coordinates[0];
   const projected = projectRingToMeters(outerRing);
 

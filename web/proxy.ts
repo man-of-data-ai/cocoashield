@@ -1,19 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { SESSION_COOKIE_NAME } from "@/lib/constants";
-import { verifySessionToken } from "@/lib/token";
+const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:3000";
 
 /**
  * Protège les routes de l'application nécessitant une authentification.
  * S'exécute côté serveur avant le rendu de la page : un utilisateur non
- * connecté ne voit jamais le HTML de /map, il est redirigé vers /login.
+ * connecté ne voit jamais le HTML de /parcels, il est redirigé vers /login.
+ *
+ * La session est vérifiée en interrogeant directement le endpoint
+ * better-auth du backend (le cookie reçu par ce proxy est retransmis tel
+ * quel) plutôt qu'en revalidant un jeton localement : l'authentification
+ * réelle vit entièrement côté backend.
  *
  * Note : dans les versions récentes de Next.js, le fichier `middleware.ts`
  * a été renommé `proxy.ts` (export `proxy` au lieu de `middleware`).
  */
 export async function proxy(request: NextRequest) {
-  const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
-  const session = await verifySessionToken(token);
+  const cookie = request.headers.get("cookie") ?? "";
+
+  const response = await fetch(`${BACKEND_URL}/v1/auth/get-session`, {
+    headers: { cookie },
+  });
+
+  const session = response.ok ? await response.json() : null;
 
   if (!session) {
     const loginUrl = new URL("/login", request.url);
@@ -25,5 +34,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/map/:path*"],
+  matcher: ["/parcels/:path*"],
 };

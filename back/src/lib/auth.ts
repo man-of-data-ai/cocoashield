@@ -17,6 +17,7 @@ export const auth = betterAuth({
   secret: process.env.BETTER_AUTH_SECRET,
   baseURL: process.env.BETTER_AUTH_URL,
   basePath: routes.betterAuthBasePath,
+  trustedOrigins: [process.env.WEB_URL ?? 'http://localhost:3002'],
   emailAndPassword: {
     enabled: true,
   },

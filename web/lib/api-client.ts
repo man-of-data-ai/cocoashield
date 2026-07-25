@@ -32,7 +32,7 @@ async function parseErrorMessage(response: Response): Promise<string> {
 }
 
 type RequestOptions = {
-  method?: "GET" | "POST" | "PUT" | "DELETE";
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   body?: BodyInit;
   headers?: Record<string, string>;
 };

@@ -1,30 +1,34 @@
 /**
- * Service de gestion des parcelles.
- * Isole les appels réseau liés aux parcelles (identification, listing).
+ * Service de gestion des parcelles. Isole les appels réseau vers le backend
+ * (back/src/modules/parcels).
  */
 
 import { apiRequest } from "@/lib/api-client";
 import type { Parcel } from "@/types/parcel";
 
-export const parcelService = {
-  /**
-   * Envoie une image de feuille cadastrale à l'API et retourne la parcelle
-   * identifiée. Utilise FormData car il s'agit d'un upload de fichier.
-   */
-  async identifyParcel(image: File): Promise<Parcel> {
-    const formData = new FormData();
-    formData.append("image", image);
+export type CreateParcelInput = {
+  name: string;
+  /** Anneau de coordonnées [longitude, latitude] délimitant le champ. */
+  coordinates: [number, number][];
+};
 
-    return apiRequest<Parcel>("/api/identify", {
-      method: "POST",
-      body: formData,
-      // Pas de Content-Type manuel : le navigateur fixe le bon boundary
-      // multipart automatiquement lorsqu'on passe un FormData.
-    });
+export const parcelService = {
+  /** Liste les parcelles de l'utilisateur connecté. */
+  async listParcels(): Promise<Parcel[]> {
+    return apiRequest<Parcel[]>("/v1/parcels");
   },
 
-  /** Liste l'ensemble des parcelles connues du système. */
-  async listParcels(): Promise<Parcel[]> {
-    return apiRequest<Parcel[]>("/api/parcels");
+  /** Récupère une parcelle et son historique d'analyses. */
+  async getParcel(id: string): Promise<Parcel> {
+    return apiRequest<Parcel>(`/v1/parcels/${id}`);
+  },
+
+  /** Crée une nouvelle parcelle à partir de son nom et de son contour. */
+  async createParcel(input: CreateParcelInput): Promise<Parcel> {
+    return apiRequest<Parcel>("/v1/parcels", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
   },
 };

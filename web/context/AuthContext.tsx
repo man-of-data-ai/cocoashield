@@ -2,7 +2,7 @@
 
 /**
  * Fournit l'état d'authentification à toute l'application via le Context
- * React. Centraliser cet état ici évite de refaire un appel /api/auth/me
+ * React. Centraliser cet état ici évite de refaire un appel de session
  * dans chaque page qui en a besoin.
  */
 
@@ -16,7 +16,7 @@ import {
 } from "react";
 
 import { authService } from "@/services/auth-service";
-import type { LoginCredentials, User } from "@/types/auth";
+import type { LoginCredentials, RegisterCredentials, User } from "@/types/auth";
 
 type AuthContextValue = {
   user: User | null;
@@ -25,6 +25,7 @@ type AuthContextValue = {
   isAuthenticating: boolean;
   error: string | null;
   login: (credentials: LoginCredentials) => Promise<User>;
+  register: (credentials: RegisterCredentials) => Promise<User>;
   logout: () => Promise<void>;
 };
 
@@ -69,6 +70,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const register = useCallback(async (credentials: RegisterCredentials) => {
+    setIsAuthenticating(true);
+    setError(null);
+
+    try {
+      const registeredUser = await authService.register(credentials);
+      setUser(registeredUser);
+      return registeredUser;
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Une erreur est survenue.";
+      setError(message);
+      throw err;
+    } finally {
+      setIsAuthenticating(false);
+    }
+  }, []);
+
   const logout = useCallback(async () => {
     await authService.logout();
     setUser(null);
@@ -76,7 +95,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, isInitializing, isAuthenticating, error, login, logout }}
+      value={{
+        user,
+        isInitializing,
+        isAuthenticating,
+        error,
+        login,
+        register,
+        logout,
+      }}
     >
       {children}
     </AuthContext.Provider>

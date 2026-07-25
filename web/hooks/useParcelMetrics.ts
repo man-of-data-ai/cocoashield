@@ -16,6 +16,6 @@ export function useParcelMetrics(parcel: Parcel | null): ParcelMetrics | null {
     if (!parcel) {
       return null;
     }
-    return computeParcelMetrics(parcel.geometry);
+    return computeParcelMetrics(parcel.boundary);
   }, [parcel]);
 }

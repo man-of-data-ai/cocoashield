@@ -40,6 +40,12 @@ export class ConfigSchema {
   @IsUrl({ require_tld: false })
   BETTER_AUTH_URL: string;
 
+  // The web frontend origin, trusted by better-auth for cross-origin
+  // requests (it calls the backend directly in some contexts, e.g. the
+  // proxy.ts session check, without going through the Next.js rewrite).
+  @IsUrl({ require_tld: false })
+  WEB_URL: string = 'http://localhost:3002';
+
   // Redis / BullMQ
   @IsString()
   REDIS_HOST: string;
