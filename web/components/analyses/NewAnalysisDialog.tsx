@@ -108,14 +108,37 @@ export default function NewAnalysisDialog({
             infectée, l&rsquo;analyse entière est considérée infectée.
           </p>
 
-          <input
-            type="file"
-            accept="image/*"
-            multiple
-            {...({ webkitdirectory: "" } as FolderInputProps)}
-            onChange={(event) => setImages(Array.from(event.target.files ?? []))}
-            className="mt-3 block w-full text-sm text-slate-600 file:mr-4 file:rounded-lg file:border-0 file:bg-blue-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-blue-700 hover:file:bg-blue-100"
-          />
+          <div className="mt-3 space-y-2">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">
+                Une ou plusieurs images
+              </label>
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={(event) =>
+                  setImages(Array.from(event.target.files ?? []))
+                }
+                className="block w-full text-sm text-slate-600 file:mr-4 file:rounded-lg file:border-0 file:bg-blue-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-blue-700 hover:file:bg-blue-100"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">
+                Ou un dossier entier
+              </label>
+              <input
+                type="file"
+                {...({ webkitdirectory: "" } as FolderInputProps)}
+                multiple
+                onChange={(event) =>
+                  setImages(Array.from(event.target.files ?? []))
+                }
+                className="block w-full text-sm text-slate-600 file:mr-4 file:rounded-lg file:border-0 file:bg-blue-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-blue-700 hover:file:bg-blue-100"
+              />
+            </div>
+          </div>
 
           {images.length > 0 && (
             <p className="mt-2 text-xs text-slate-500">
