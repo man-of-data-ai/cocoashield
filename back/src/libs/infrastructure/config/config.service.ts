@@ -71,4 +71,15 @@ export class ConfigService {
   get betterAuthUrl(): string {
     return this.envConfig.BETTER_AUTH_URL;
   }
+
+  get redisConnection(): { host: string; port: number } {
+    return {
+      host: this.envConfig.REDIS_HOST,
+      port: +this.envConfig.REDIS_PORT,
+    };
+  }
+
+  get uploadsDir(): string {
+    return this.envConfig.UPLOADS_DIR;
+  }
 }

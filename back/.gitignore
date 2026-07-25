@@ -23,3 +23,6 @@ yarn-error.log*
 # tests
 /coverage
 /.nyc_output
+
+# local file storage
+/uploads

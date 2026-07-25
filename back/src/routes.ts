@@ -17,8 +17,21 @@ const users = {
   register: '/register',
 };
 
+const parcels = {
+  root: '/parcels',
+  byId: '/:id',
+  analyses: '/:id/analyses',
+};
+
+const analyses = {
+  root: '/analyses',
+  byId: '/:id',
+};
+
 export const routes = {
   version: v1,
   betterAuthBasePath,
   users,
+  parcels,
+  analyses,
 };

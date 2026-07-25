@@ -39,4 +39,15 @@ export class ConfigSchema {
 
   @IsUrl({ require_tld: false })
   BETTER_AUTH_URL: string;
+
+  // Redis / BullMQ
+  @IsString()
+  REDIS_HOST: string;
+
+  @IsNumber()
+  REDIS_PORT: number = 6379;
+
+  // Local disk storage
+  @IsString()
+  UPLOADS_DIR: string = './uploads';
 }
