@@ -5,26 +5,31 @@ import * as fs from 'fs';
 import { ConfigSchema, Environment } from './config.schema';
 import { validate } from './env-validations';
 
-export interface EnvConfig {
-  [key: string]: any;
-}
-
 @Injectable()
 export class ConfigService {
-  private envConfig: EnvConfig;
+  private envConfig: ConfigSchema = {
+    NODE_ENV: (process.env.NODE_ENV as Environment) ?? Environment.DEVELOPMENT,
+  } as ConfigSchema;
 
-  constructor() {
-    this.envConfig = { NODE_ENV: process.env.NODE_ENV };
-  }
-
-  async loadConfig(): Promise<void> {
-    if (process.env.NODE_ENV === Environment.DEVELOPMENT || !process.env.NODE_ENV) {
-      const config = fs.existsSync('.env') ? dotenv.parse(fs.readFileSync('.env')) : {};
-      this.envConfig = validate({ ...this.envConfig, ...config, ...process.env }, ConfigSchema);
+  loadConfig(): void {
+    if (
+      process.env.NODE_ENV === Environment.DEVELOPMENT ||
+      !process.env.NODE_ENV
+    ) {
+      const config = fs.existsSync('.env')
+        ? dotenv.parse(fs.readFileSync('.env'))
+        : {};
+      this.envConfig = validate(
+        { ...this.envConfig, ...config, ...process.env },
+        ConfigSchema,
+      );
       return;
     }
 
-    this.envConfig = validate({ ...this.envConfig, ...process.env }, ConfigSchema);
+    this.envConfig = validate(
+      { ...this.envConfig, ...process.env },
+      ConfigSchema,
+    );
   }
 
   get nodeEnv(): Environment {
@@ -54,7 +59,8 @@ export class ConfigService {
   }
 
   get databaseUrl(): string {
-    const { DB_USERNAME, DB_PASSWORD, DB_HOST, DB_PORT, DB_NAME } = this.envConfig;
+    const { DB_USERNAME, DB_PASSWORD, DB_HOST, DB_PORT, DB_NAME } =
+      this.envConfig;
     return `postgresql://${DB_USERNAME}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}`;
   }
 

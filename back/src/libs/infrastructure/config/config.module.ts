@@ -6,9 +6,9 @@ import { ConfigService } from './config.service';
   providers: [
     {
       provide: ConfigService,
-      useFactory: async (): Promise<ConfigService> => {
+      useFactory: (): ConfigService => {
         const configService = new ConfigService();
-        await configService.loadConfig();
+        configService.loadConfig();
         return configService;
       },
     },

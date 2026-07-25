@@ -1,4 +1,4 @@
-import { IsEnum, IsNumber, IsOptional, IsString, IsUrl } from 'class-validator';
+import { IsEnum, IsNumber, IsString, IsUrl } from 'class-validator';
 
 export enum Environment {
   PRODUCTION = 'production',
