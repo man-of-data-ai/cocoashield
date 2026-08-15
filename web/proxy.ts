@@ -1,38 +1,50 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:3000";
+type Role = "administrateur" | "direction_ccc" | "agronome_terrain";
 
-/**
- * Protège les routes de l'application nécessitant une authentification.
- * S'exécute côté serveur avant le rendu de la page : un utilisateur non
- * connecté ne voit jamais le HTML de /parcels, il est redirigé vers /login.
- *
- * La session est vérifiée en interrogeant directement le endpoint
- * better-auth du backend (le cookie reçu par ce proxy est retransmis tel
- * quel) plutôt qu'en revalidant un jeton localement : l'authentification
- * réelle vit entièrement côté backend.
- *
- * Note : dans les versions récentes de Next.js, le fichier `middleware.ts`
- * a été renommé `proxy.ts` (export `proxy` au lieu de `middleware`).
- */
+function area(pathname: string): string | null {
+  if (/^\/parcels\/[^/]+\/analyses\/[^/]+/.test(pathname)) return "analysis";
+  if (pathname.startsWith("/parcels")) return "parcels";
+  if (pathname.startsWith("/map")) return "map";
+  if (pathname.startsWith("/comparaison")) return "comparison";
+  if (pathname.startsWith("/missions")) return "missions";
+  if (pathname.startsWith("/exports")) return "exports";
+  if (pathname.startsWith("/rapports")) return "reports";
+  if (pathname.startsWith("/configuration")) return "configuration";
+  if (pathname.startsWith("/utilisateurs")) return "users";
+  if (pathname.startsWith("/audit")) return "audit";
+  return null;
+}
+
+const permissions: Record<Role, string[]> = {
+  administrateur: ["parcels","map","comparison","missions","exports","reports","configuration","users","audit","analysis"],
+  direction_ccc: ["map","reports","audit","analysis"],
+  agronome_terrain: ["parcels","map","comparison","missions","analysis"],
+};
+
+function home(role: Role) { return role === "agronome_terrain" ? "/parcels" : "/map"; }
+
 export async function proxy(request: NextRequest) {
   const cookie = request.headers.get("cookie") ?? "";
-
-  const response = await fetch(`${BACKEND_URL}/v1/auth/get-session`, {
-    headers: { cookie },
-  });
-
-  const session = response.ok ? await response.json() : null;
-
+  const sessionResponse = await fetch(`${BACKEND_URL}/v1/auth/get-session`, { headers: { cookie }, cache: "no-store" });
+  const session = sessionResponse.ok ? await sessionResponse.json() : null;
   if (!session) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("from", request.nextUrl.pathname);
     return NextResponse.redirect(loginUrl);
   }
 
+  const profileResponse = await fetch(`${BACKEND_URL}/v1/users/me/profile`, { headers: { cookie }, cache: "no-store" });
+  if (!profileResponse.ok) return NextResponse.redirect(new URL("/login", request.url));
+  const profile = await profileResponse.json() as { role: Role };
+  const requestedArea = area(request.nextUrl.pathname);
+  if (requestedArea && !permissions[profile.role]?.includes(requestedArea)) {
+    return NextResponse.redirect(new URL(home(profile.role), request.url));
+  }
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/parcels/:path*"],
+  matcher: ["/parcels/:path*", "/map/:path*", "/comparaison/:path*", "/missions/:path*", "/exports/:path*", "/rapports/:path*", "/configuration/:path*", "/utilisateurs/:path*", "/audit/:path*"],
 };

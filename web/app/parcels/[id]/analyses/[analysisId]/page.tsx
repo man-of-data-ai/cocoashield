@@ -1,205 +1,42 @@
 "use client";
 
-/**
- * Détail d'une analyse : statut/résultat, notes éditables, carte des images
- * géolocalisées (clic pour afficher le détail d'une image) et liste des
- * images sans position GPS.
- */
-
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useParams, useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { CalendarClock, FileText, Gauge, Images, MapPin, Sprout } from "lucide-react";
 
 import ImageDetailPanel from "@/components/analyses/ImageDetailPanel";
+import AppShell from "@/components/layout/AppShell";
 import Alert from "@/components/ui/Alert";
 import Spinner from "@/components/ui/Spinner";
 import StatusBadge from "@/components/ui/StatusBadge";
+import SeverityLayerSelector from "@/components/map/SeverityLayerSelector";
 import { ApiError } from "@/lib/api-client";
 import { analysisService } from "@/services/analysis-service";
 import type { Analysis } from "@/types/parcel";
+import type { Severity } from "@/lib/severity";
+import type { RiskZone } from "@/lib/risk-zones";
 
-const AnalysisImageMap = dynamic(
-  () => import("@/components/analyses/AnalysisImageMap"),
-  { ssr: false }
-);
+const AnalysisImageMap = dynamic(() => import("@/components/analyses/AnalysisImageMap"), { ssr: false });
+const severityLabels: Record<string,string> = { faible:"Faible", modere:"Modérée", eleve:"Élevée", critique:"Critique" };
 
 export default function AnalysisDetailPage() {
-  const params = useParams<{ id: string; analysisId: string }>();
-
-  const [analysis, setAnalysis] = useState<Analysis | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
-  const [notes, setNotes] = useState("");
-  const [isSavingNotes, setIsSavingNotes] = useState(false);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    analysisService
-      .getAnalysis(params.analysisId)
-      .then((data) => {
-        if (isMounted) {
-          setAnalysis(data);
-          setNotes(data.notes ?? "");
-          setSelectedImageId(data.images[0]?.id ?? null);
-        }
-      })
-      .catch((err) => {
-        if (isMounted) {
-          setError(
-            err instanceof ApiError
-              ? err.message
-              : "Impossible de charger l'analyse."
-          );
-        }
-      })
-      .finally(() => {
-        if (isMounted) {
-          setIsLoading(false);
-        }
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [params.analysisId]);
-
-  async function handleSaveNotes() {
-    setIsSavingNotes(true);
-    try {
-      const updated = await analysisService.updateNotes(params.analysisId, notes);
-      setAnalysis(updated);
-    } finally {
-      setIsSavingNotes(false);
-    }
-  }
-
-  if (isLoading) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-100">
-        <Spinner label="Chargement de l'analyse..." />
-      </main>
-    );
-  }
-
-  if (error || !analysis) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-100 px-4">
-        <Alert variant="error">{error ?? "Analyse introuvable."}</Alert>
-      </main>
-    );
-  }
-
-  const selectedImage =
-    analysis.images.find((image) => image.id === selectedImageId) ?? null;
-  const imagesWithoutGps = analysis.images.filter(
-    (image) => image.latitude === null || image.longitude === null
-  );
-
-  return (
-    <main className="min-h-screen bg-slate-100">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto max-w-6xl px-6 py-5">
-          <Link
-            href={`/parcels/${params.id}`}
-            className="text-sm text-slate-500 hover:text-slate-700"
-          >
-            ← {analysis.parcel?.name ?? "Retour à la parcelle"}
-          </Link>
-
-          <div className="mt-2 flex items-center justify-between">
-            <h1 className="text-2xl font-bold text-slate-900">
-              Analyse du{" "}
-              {new Date(analysis.createdAt).toLocaleDateString("fr-FR", {
-                dateStyle: "medium",
-              })}
-            </h1>
-            {analysis.result && <StatusBadge status={analysis.result} />}
-          </div>
-        </div>
-      </header>
-
-      <section className="mx-auto max-w-6xl px-6 py-8">
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:col-span-2">
-            <div className="h-[420px]">
-              {analysis.parcel && (
-                <AnalysisImageMap
-                  boundary={analysis.parcel.boundary}
-                  images={analysis.images}
-                  selectedImageId={selectedImageId}
-                  onSelect={setSelectedImageId}
-                />
-              )}
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            {selectedImage && <ImageDetailPanel image={selectedImage} />}
-
-            <div className="rounded-2xl border border-slate-200 bg-white p-4">
-              <label
-                htmlFor="notes"
-                className="block text-sm font-medium text-slate-700"
-              >
-                Notes
-              </label>
-              <textarea
-                id="notes"
-                rows={4}
-                value={notes}
-                onChange={(event) => setNotes(event.target.value)}
-                className="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                placeholder="Ajouter une note sur cette analyse..."
-              />
-              <button
-                type="button"
-                onClick={handleSaveNotes}
-                disabled={isSavingNotes}
-                className="mt-2 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-              >
-                {isSavingNotes ? "Enregistrement..." : "Enregistrer"}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {imagesWithoutGps.length > 0 && (
-          <div className="mt-8">
-            <h2 className="mb-3 text-sm font-semibold text-slate-900">
-              Images sans position GPS ({imagesWithoutGps.length})
-            </h2>
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-              {imagesWithoutGps.map((image) => (
-                <button
-                  key={image.id}
-                  type="button"
-                  onClick={() => setSelectedImageId(image.id)}
-                  className={`overflow-hidden rounded-xl border text-left transition ${
-                    selectedImageId === image.id
-                      ? "border-blue-400 ring-2 ring-blue-100"
-                      : "border-slate-200 hover:border-slate-300"
-                  }`}
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element -- image servie par le backend */}
-                  <img
-                    src={analysisService.imageFileUrl(image.id)}
-                    alt="Photo de la parcelle"
-                    className="h-24 w-full object-cover"
-                  />
-                  {image.result && (
-                    <div className="p-2">
-                      <StatusBadge status={image.result} />
-                    </div>
-                  )}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-      </section>
-    </main>
-  );
+  const params=useParams<{id:string;analysisId:string}>(); const searchParams=useSearchParams(); const openedFromReports=searchParams.get("from")==="reports"; const [analysis,setAnalysis]=useState<Analysis|null>(null); const [loading,setLoading]=useState(true); const [error,setError]=useState<string|null>(null); const [selected,setSelected]=useState<string|null>(null); const [activeSeverityLevels,setActiveSeverityLevels]=useState<Severity[]>(["faible","modere","eleve","critique"]); const [selectedRiskZone,setSelectedRiskZone]=useState<RiskZone|null>(null); const [notes,setNotes]=useState(""); const [saving,setSaving]=useState(false);
+  useEffect(()=>{let mounted=true; analysisService.getAnalysis(params.analysisId).then((d)=>{if(mounted){setAnalysis(d);setNotes(d.notes??"");setSelected(d.images[0]?.id??null);}}).catch((e)=>mounted&&setError(e instanceof ApiError?e.message:"Impossible de charger l’analyse.")).finally(()=>mounted&&setLoading(false)); return()=>{mounted=false};},[params.analysisId]);
+  const selectedImage=useMemo(()=>analysis?.images.find((i)=>i.id===selected)??null,[analysis,selected]);
+  async function save(){setSaving(true);try{setAnalysis(await analysisService.updateNotes(params.analysisId,notes));}finally{setSaving(false);}}
+  if(loading) return <AppShell title="Analyse"><div className="flex justify-center py-16"><Spinner label="Chargement de l’analyse..."/></div></AppShell>;
+  if(error||!analysis) return <AppShell title="Analyse"><Alert variant="error">{error??"Analyse introuvable."}</Alert></AppShell>;
+  const infection = analysis.infectionPercentage ?? (()=>{const p=analysis.images.filter(i=>i.status==="processed"&&i.result);const n=p.filter(i=>i.result==="infected").length;return p.length?(n/p.length)*100:0;})();
+  return <AppShell title={`Analyse · ${analysis.parcel?.name??"Parcelle"}`} headerActions={analysis.result?<StatusBadge status={analysis.result}/>:undefined}>
+    <div className="mb-6 flex flex-wrap items-center justify-between gap-3"><Link href={openedFromReports ? "/rapports" : `/parcels/${params.id}`} className="text-sm font-semibold text-slate-500 hover:text-[#244B32]">← {openedFromReports ? "Rapports" : (analysis.parcel?.name??"Parcelle")}</Link>{analysis.reportGeneratedAt&&<Link href={`/rapports?analysis=${analysis.id}`} className="inline-flex items-center gap-2 rounded-2xl border border-[#D9E5D3] bg-white px-4 py-2.5 text-sm font-bold text-[#31583B] hover:bg-[#F6FAF3]"><FileText className="h-4 w-4"/>Voir le rapport</Link>}</div>
+    <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      {[{label:"Date",value:new Date(analysis.completedAt??analysis.createdAt).toLocaleString("fr-FR",{dateStyle:"medium",timeStyle:"short"}),icon:CalendarClock},{label:"Photos",value:String(analysis.images.length),icon:Images},{label:"Infection",value:`${infection.toFixed(1)} %`,icon:Gauge},{label:"Sévérité",value:analysis.severityLevel?severityLabels[analysis.severityLevel]:"En attente",icon:Sprout}].map((item)=><div key={item.label} className="rounded-3xl border border-[#E2E9DE] bg-white p-4 shadow-sm"><item.icon className="h-5 w-5 text-[#628847]"/><p className="mt-3 text-[10px] font-bold uppercase tracking-widest text-slate-400">{item.label}</p><p className="mt-1 text-sm font-bold text-slate-800">{item.value}</p></div>)}
+    </div>
+    <div className="grid gap-5 xl:grid-cols-[minmax(0,1.6fr)_380px]">
+      <section className="overflow-hidden rounded-[28px] border border-[#E2E9DE] bg-white shadow-sm"><div className="border-b border-[#EDF1EA] px-5 py-4"><div className="flex items-start justify-between gap-3"><div><h2 className="text-sm font-bold text-slate-900">Localisation des observations</h2><p className="mt-1 text-xs text-slate-400">Zones à risque et observations géolocalisées de cette analyse.</p></div><MapPin className="h-5 w-5 text-[#6A904D]"/></div><div className="mt-3"><SeverityLayerSelector value={activeSeverityLevels} onChange={setActiveSeverityLevels} compact/></div></div><div className="h-[520px]">{analysis.parcel&&<AnalysisImageMap parcel={analysis.parcel} analysis={analysis} activeSeverityLevels={activeSeverityLevels} selectedImageId={selected} onSelectImage={setSelected} selectedRiskZone={selectedRiskZone} onSelectRiskZone={setSelectedRiskZone}/>}</div></section>
+      <div className="space-y-5">{selectedImage&&<ImageDetailPanel image={selectedImage}/>}<section className="rounded-[26px] border border-[#E2E9DE] bg-white p-5 shadow-sm"><label htmlFor="notes" className="text-xs font-bold uppercase tracking-wider text-slate-500">Observations</label><textarea id="notes" rows={5} value={notes} onChange={(e)=>setNotes(e.target.value)} className="mt-3 w-full rounded-2xl border border-[#DDE6D9] bg-[#FAFCF8] px-3 py-3 text-sm outline-none focus:border-[#9BBC89]" placeholder="Ajouter une observation terrain"/><button onClick={save} disabled={saving} className="mt-3 w-full rounded-2xl bg-[#244B32] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#356A46] disabled:opacity-60">{saving?"Enregistrement...":"Enregistrer"}</button></section>{analysis.reportGeneratedAt&&<section className="rounded-[26px] border border-[#DCE8D6] bg-[#F7FAF4] p-5"><div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-[#5E8544]"><FileText className="h-5 w-5"/></span><div><h3 className="text-sm font-bold text-slate-900">Rapport généré</h3><p className="mt-1 text-xs text-slate-500">Associé automatiquement à cette analyse.</p></div></div></section>}</div>
+    </div>
+  </AppShell>;
 }

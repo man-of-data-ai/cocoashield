@@ -3,7 +3,7 @@
  */
 
 import { apiRequest } from "@/lib/api-client";
-import type { Analysis, PendingImport } from "@/types/parcel";
+import type { Analysis } from "@/types/parcel";
 
 export const analysisService = {
   /** Récupère une analyse et ses images. */
@@ -23,26 +23,26 @@ export const analysisService = {
   /**
    * Démarre une nouvelle analyse à partir d'une ou plusieurs images (upload
    * web : toujours classées côté serveur, jamais pré-classées comme le
-   * mobile).
+   * mobile). `missionName` associe (ou crée) une mission/campagne.
    */
-  async createAnalysis(parcelId: string, images: File[]): Promise<Analysis> {
+  async createAnalysis(
+    parcelId: string,
+    images: File[],
+    missionName?: string,
+    profileId?: string
+  ): Promise<Analysis> {
     const formData = new FormData();
     for (const image of images) {
       formData.append("images", image);
     }
+    if (missionName && missionName.trim()) {
+      formData.append("missionName", missionName.trim());
+    }
+    if (profileId && profileId.trim()) {
+      formData.append("profileId", profileId.trim());
+    }
 
     return apiRequest<Analysis>(`/v1/parcels/${parcelId}/analyses`, {
-      method: "POST",
-      body: formData,
-    });
-  },
-
-  /** Importe un fichier (ex: .rar) à traiter plus tard, sans le classer maintenant. */
-  async createImport(parcelId: string, file: File): Promise<PendingImport> {
-    const formData = new FormData();
-    formData.append("file", file);
-
-    return apiRequest<PendingImport>(`/v1/parcels/${parcelId}/imports`, {
       method: "POST",
       body: formData,
     });

@@ -8,7 +8,9 @@ import { extname } from 'path';
 import * as fs from 'fs';
 import { ConfigModule } from '../../libs/infrastructure/config/config.module';
 import { ConfigService } from '../../libs/infrastructure/config/config.service';
+import { MissionsModule } from '../missions/missions.module';
 import { ParcelsModule } from '../parcels/parcels.module';
+import { PlatformConfigModule } from '../platform-config/platform-config.module';
 import { IMAGE_INFERENCE_QUEUE } from './analyses.constants';
 import {
   AnalysesController,
@@ -18,18 +20,18 @@ import {
 import { AnalysesService } from './analyses.service';
 import { AnalysisImage } from './entities/analysis-image.entity';
 import { Analysis } from './entities/analysis.entity';
-import { PendingImport } from './entities/pending-import.entity';
 import { ImageGeoService } from './image-geo.service';
 import { ImageInferenceProcessor } from './image-inference.processor';
 import { ImageInferenceService } from './image-inference.service';
 import { AnalysisImageRepository } from './repositories/analysis-image.repository';
 import { AnalysisRepository } from './repositories/analysis.repository';
-import { PendingImportRepository } from './repositories/pending-import.repository';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Analysis, AnalysisImage, PendingImport]),
+    TypeOrmModule.forFeature([Analysis, AnalysisImage]),
     ParcelsModule,
+    MissionsModule,
+    PlatformConfigModule,
     BullModule.registerQueue({ name: IMAGE_INFERENCE_QUEUE }),
     MulterModule.registerAsync({
       imports: [ConfigModule],
@@ -56,7 +58,6 @@ import { PendingImportRepository } from './repositories/pending-import.repositor
     AnalysesService,
     AnalysisRepository,
     AnalysisImageRepository,
-    PendingImportRepository,
     ImageGeoService,
     ImageInferenceService,
     ImageInferenceProcessor,

@@ -7,6 +7,7 @@ import {
   OneToMany,
 } from 'typeorm';
 import { RestEntity } from '../../../libs/infrastructure/persistence/entities/rest.entity';
+import { Mission } from '../../missions/entities/mission.entity';
 import { Parcel } from '../../parcels/entities/parcel.entity';
 import { AnalysisImage } from './analysis-image.entity';
 import { AnalysisResult } from './analysis-result.enum';
@@ -48,6 +49,40 @@ export class Analysis extends RestEntity {
 
   @Column({ name: 'completed_at', type: 'timestamptz', nullable: true })
   completedAt: Date | null;
+
+  @Column({ name: 'infection_percentage', type: 'float', nullable: true })
+  infectionPercentage: number | null;
+
+  @Column({ name: 'severity_level', type: 'varchar', nullable: true })
+  severityLevel: string | null;
+
+  @Column({ name: 'affected_zones', type: 'jsonb', nullable: true })
+  affectedZones: Array<{
+    latitude: number;
+    longitude: number;
+    severity: number;
+    severityLevel?: 'faible' | 'modere' | 'eleve' | 'critique';
+    surfaceSquareMeters?: number | null;
+    geometry?: { type: 'Polygon'; coordinates: number[][][] } | null;
+  }> | null;
+
+  @Column({ name: 'report_generated_at', type: 'timestamptz', nullable: true })
+  reportGeneratedAt: Date | null;
+
+  @Index()
+  @Column({ name: 'profile_id', type: 'varchar', nullable: true })
+  profileId: string | null;
+
+  @Index()
+  @Column({ name: 'mission_id', type: 'varchar', nullable: true })
+  missionId: string | null;
+
+  @ManyToOne(() => Mission, (mission) => mission.analyses, {
+    onDelete: 'SET NULL',
+    nullable: true,
+  })
+  @JoinColumn({ name: 'mission_id' })
+  mission: Mission | null;
 
   @OneToMany(() => AnalysisImage, (image) => image.analysis)
   images: AnalysisImage[];

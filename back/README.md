@@ -96,3 +96,24 @@ Nest is an MIT-licensed open source project. It can grow thanks to the sponsors 
 ## License
 
 Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+
+## Données de démonstration Cocoashield
+
+Pour préparer un environnement local complet :
+
+```bash
+docker compose up -d
+npm run auth:migrate
+npm run seed:demo
+npm run start:dev
+```
+
+`auth:migrate` prépare les tables Better Auth et `seed:demo` démarre un contexte Nest temporaire qui synchronise les entités TypeORM avant d'insérer les données. Le backend reste ensuite disponible sur `http://localhost:3000`.
+
+Le seed est réexécutable. Il crée trois profils correspondant exactement aux rôles de l'application et des jeux de données pour les parcelles, missions, analyses, images, imports en attente, exports, audit et configuration.
+
+Comptes de test (mot de passe commun : `CocoaDemo2026!`) :
+
+- `admin@cocoashield.local` — Administrateur
+- `direction@ccc.ci` — Direction CCC
+- `agronome@cocoashield.local` — Agronome Terrain

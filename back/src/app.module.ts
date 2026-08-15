@@ -7,9 +7,14 @@ import { AppService } from './app.service';
 import { ConfigModule } from './libs/infrastructure/config/config.module';
 import { ConfigService } from './libs/infrastructure/config/config.service';
 import { AnalysesModule } from './modules/analyses/analyses.module';
+import { AuditModule } from './modules/audit/audit.module';
 import { AuthController } from './modules/auth/auth.controller';
 import { createAuth } from './modules/auth/auth.provider';
+import { MissionsModule } from './modules/missions/missions.module';
+import { ExportsModule } from './modules/exports/exports.module';
 import { ParcelsModule } from './modules/parcels/parcels.module';
+import { PlatformConfigModule } from './modules/platform-config/platform-config.module';
+import { UsersModule } from './modules/users/users.module';
 
 @Module({
   imports: [
@@ -30,8 +35,13 @@ import { ParcelsModule } from './modules/parcels/parcels.module';
       }),
       inject: [ConfigService],
     }),
+    AuditModule,
     ParcelsModule,
     AnalysesModule,
+    MissionsModule,
+    ExportsModule,
+    PlatformConfigModule,
+    UsersModule,
   ],
   controllers: [AppController, AuthController],
   providers: [AppService],

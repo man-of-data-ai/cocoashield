@@ -1,12 +1,17 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
-    Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
-    "Liberation Mono", "Courier New", monospace;
+  --background: #f6f8f3;
+  --foreground: #243328;
+  --forest: #244b32;
+  --forest-2: #356a46;
+  --leaf: #87b940;
+  --leaf-soft: #eef5e9;
+  --bark: #6b4a3a;
+  --orange: #d9782b;
+  --line: #e2e9de;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
 @theme inline {
@@ -16,15 +21,41 @@
   --font-mono: var(--font-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+* { box-sizing: border-box; }
+html { background: var(--background); }
 body {
-  background: var(--background);
+  margin: 0;
+  background:
+    radial-gradient(circle at 88% 8%, rgba(135,185,64,.08), transparent 25rem),
+    var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
 }
+
+::selection { background: rgba(135,185,64,.28); color: #183222; }
+
+button, a, input, select, textarea { transition-duration: 160ms; }
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; }
+
+/* Cohérence visuelle sur les cartes existantes sans modifier leur logique. */
+.rounded-xl.border.bg-white,
+.rounded-2xl.border.bg-white,
+.rounded-lg.border.bg-white {
+  border-color: #e4eadf !important;
+  box-shadow: 0 1px 2px rgba(30,52,38,.03), 0 10px 30px rgba(30,52,38,.035);
+}
+
+input, select, textarea {
+  accent-color: var(--leaf);
+}
+
+input:focus, select:focus, textarea:focus {
+  box-shadow: 0 0 0 3px rgba(135,185,64,.12);
+}
+
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #ced9c8; border-radius: 999px; border: 2px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background: #adc09f; border: 2px solid transparent; background-clip: padding-box; }

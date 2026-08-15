@@ -7,35 +7,37 @@ import {
 import { Queue } from 'bullmq';
 import * as path from 'path';
 import { ConfigService } from '../../libs/infrastructure/config/config.service';
+import { MissionsService } from '../missions/missions.service';
 import { ParcelStatus } from '../parcels/entities/parcel.entity';
 import { ParcelsService } from '../parcels/parcels.service';
+import { PlatformConfigService } from '../platform-config/platform-config.service';
 import { IMAGE_INFERENCE_QUEUE, ImageInferenceJob } from './analyses.constants';
 import { AnalysisImageMeta } from './dtos/create-analysis.dto';
 import {
   AnalysisImage,
   AnalysisImageSource,
   AnalysisImageStatus,
+  GeolocationQuality,
 } from './entities/analysis-image.entity';
 import {
   Analysis,
   AnalysisResult,
   AnalysisStatus,
 } from './entities/analysis.entity';
-import { PendingImport } from './entities/pending-import.entity';
 import { ImageGeoService } from './image-geo.service';
 import { AnalysisImageRepository } from './repositories/analysis-image.repository';
 import { AnalysisRepository } from './repositories/analysis.repository';
-import { PendingImportRepository } from './repositories/pending-import.repository';
 
 @Injectable()
 export class AnalysesService {
   constructor(
     private readonly analysisRepository: AnalysisRepository,
     private readonly analysisImageRepository: AnalysisImageRepository,
-    private readonly pendingImportRepository: PendingImportRepository,
     private readonly parcelsService: ParcelsService,
     private readonly imageGeoService: ImageGeoService,
     private readonly configService: ConfigService,
+    private readonly missionsService: MissionsService,
+    private readonly platformConfigService: PlatformConfigService,
     @InjectQueue(IMAGE_INFERENCE_QUEUE)
     private readonly imageInferenceQueue: Queue<ImageInferenceJob>,
   ) {}
@@ -45,6 +47,9 @@ export class AnalysesService {
     ownerId: string,
     files: Express.Multer.File[],
     imageMetas: AnalysisImageMeta[],
+    missionId?: string,
+    missionName?: string,
+    profileId?: string,
   ): Promise<Analysis> {
     if (files.length === 0) {
       throw new BadRequestException('At least one image is required');
@@ -55,13 +60,27 @@ export class AnalysesService {
       );
     }
 
-    // Ownership check - throws NotFoundException if the parcel isn't the
-    // caller's.
+    // Ownership check - throws NotFoundException if the parcel is not owned by the caller.
     await this.parcelsService.findOneForOwner(parcelId, ownerId);
+
+    if (profileId) {
+      await this.platformConfigService.getActiveDroneProfile(
+        ownerId,
+        profileId,
+      );
+    }
+
+    const mission = await this.missionsService.resolve(
+      ownerId,
+      missionId,
+      missionName,
+    );
 
     const analysis = await this.analysisRepository.create({
       parcelId,
       status: AnalysisStatus.PENDING,
+      missionId: mission?.id ?? null,
+      profileId: profileId ?? null,
     });
 
     let hasPendingImage = false;
@@ -72,6 +91,8 @@ export class AnalysesService {
       const isPreClassified =
         meta?.source === AnalysisImageSource.MOBILE && meta.result;
       const gps = await this.imageGeoService.extractGps(file.path);
+
+      const geolocationQuality = gps ? GeolocationQuality.PRECISE : GeolocationQuality.NONE;
 
       const image = await this.analysisImageRepository.create({
         analysisId: analysis.id,
@@ -84,6 +105,7 @@ export class AnalysesService {
         confidence: isPreClassified ? (meta.confidence ?? null) : null,
         latitude: gps?.latitude ?? null,
         longitude: gps?.longitude ?? null,
+        geolocationQuality,
       });
 
       if (!isPreClassified) {
@@ -106,21 +128,6 @@ export class AnalysesService {
     }
 
     return this.findOne(analysis.id);
-  }
-
-  async createImport(
-    parcelId: string,
-    ownerId: string,
-    file: Express.Multer.File,
-  ): Promise<PendingImport> {
-    await this.parcelsService.findOneForOwner(parcelId, ownerId);
-
-    return this.pendingImportRepository.create({
-      parcelId,
-      filePath: path.basename(file.path),
-      originalName: file.originalname,
-      mimeType: file.mimetype,
-    });
   }
 
   async findOne(id: string): Promise<Analysis> {
@@ -179,14 +186,42 @@ export class AnalysesService {
       return;
     }
 
-    const isInfected = analysis.images.some(
+    const processed = analysis.images.filter(
+      (image: AnalysisImage) =>
+        image.status === AnalysisImageStatus.PROCESSED && image.result !== null,
+    );
+    const infected = processed.filter(
       (image: AnalysisImage) => image.result === AnalysisResult.INFECTED,
     );
+    const infectionPercentage =
+      processed.length > 0 ? (infected.length / processed.length) * 100 : 0;
+    const severityLevel =
+      infectionPercentage >= 40
+        ? 'critique'
+        : infectionPercentage >= 25
+          ? 'eleve'
+          : infectionPercentage >= 10
+            ? 'modere'
+            : 'faible';
+    const affectedZones = infected
+      .filter((image) => image.latitude !== null && image.longitude !== null)
+      .map((image) => ({
+        latitude: image.latitude!,
+        longitude: image.longitude!,
+        severity: Math.max(0.15, Math.min(1, infectionPercentage / 100)),
+        severityLevel: severityLevel as 'faible' | 'modere' | 'eleve' | 'critique',
+      }));
+    const isInfected = infected.length > 0;
+    const completedAt = new Date();
 
     await this.analysisRepository.update(analysisId, {
       status: AnalysisStatus.COMPLETED,
       result: isInfected ? AnalysisResult.INFECTED : AnalysisResult.HEALTHY,
-      completedAt: new Date(),
+      completedAt,
+      infectionPercentage,
+      severityLevel,
+      affectedZones,
+      reportGeneratedAt: completedAt,
     });
 
     await this.parcelsService.updateStatus(

@@ -48,7 +48,7 @@ export default function RegisterForm({
           required
           value={email}
           onChange={(event) => setEmail(event.target.value)}
-          className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-2.5 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+          className="mt-1 w-full rounded-2xl border border-[#DCE6D7] bg-[#FBFCFA] px-4 py-3 text-slate-900 outline-none transition focus:border-[#87B940] focus:bg-white focus:ring-2 focus:ring-[#87B940]/15"
           placeholder="vous@cocoashield.dev"
         />
       </div>
@@ -68,7 +68,7 @@ export default function RegisterForm({
           minLength={3}
           value={username}
           onChange={(event) => setUsername(event.target.value)}
-          className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-2.5 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+          className="mt-1 w-full rounded-2xl border border-[#DCE6D7] bg-[#FBFCFA] px-4 py-3 text-slate-900 outline-none transition focus:border-[#87B940] focus:bg-white focus:ring-2 focus:ring-[#87B940]/15"
           placeholder="planteur_ci"
         />
       </div>
@@ -88,7 +88,7 @@ export default function RegisterForm({
           minLength={8}
           value={password}
           onChange={(event) => setPassword(event.target.value)}
-          className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-2.5 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+          className="mt-1 w-full rounded-2xl border border-[#DCE6D7] bg-[#FBFCFA] px-4 py-3 text-slate-900 outline-none transition focus:border-[#87B940] focus:bg-white focus:ring-2 focus:ring-[#87B940]/15"
           placeholder="••••••••"
         />
       </div>
@@ -108,7 +108,7 @@ export default function RegisterForm({
           minLength={8}
           value={confirmPassword}
           onChange={(event) => setConfirmPassword(event.target.value)}
-          className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-2.5 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+          className="mt-1 w-full rounded-2xl border border-[#DCE6D7] bg-[#FBFCFA] px-4 py-3 text-slate-900 outline-none transition focus:border-[#87B940] focus:bg-white focus:ring-2 focus:ring-[#87B940]/15"
           placeholder="••••••••"
         />
       </div>
@@ -118,7 +118,7 @@ export default function RegisterForm({
       <button
         type="submit"
         disabled={isSubmitting}
-        className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+        className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#244B32] px-4 py-3 font-semibold text-white transition hover:bg-[#356A46] hover:shadow-[0_10px_24px_rgba(36,75,50,0.14)] disabled:cursor-not-allowed disabled:bg-slate-300"
       >
         {isSubmitting ? <Spinner label="Création du compte..." /> : "S'inscrire"}
       </button>

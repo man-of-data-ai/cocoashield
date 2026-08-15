@@ -7,11 +7,10 @@ import {
   Patch,
   Post,
   StreamableFile,
-  UploadedFile,
   UploadedFiles,
   UseInterceptors,
 } from '@nestjs/common';
-import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
+import { FilesInterceptor } from '@nestjs/platform-express';
 import { Session } from '@thallesp/nestjs-better-auth';
 import type { UserSession } from '@thallesp/nestjs-better-auth';
 import { createReadStream } from 'fs';
@@ -31,6 +30,9 @@ export class ParcelAnalysesController {
     @Param('id') parcelId: string,
     @UploadedFiles() images: Express.Multer.File[],
     @Body('results') resultsJson?: string,
+    @Body('missionId') missionId?: string,
+    @Body('missionName') missionName?: string,
+    @Body('profileId') profileId?: string,
   ) {
     const results = this.parseResults(resultsJson);
     return this.analysesService.create(
@@ -38,20 +40,10 @@ export class ParcelAnalysesController {
       session.user.id,
       images,
       results,
+      missionId,
+      missionName,
+      profileId,
     );
-  }
-
-  @Post(routes.parcels.imports)
-  @UseInterceptors(FileInterceptor('file'))
-  createImport(
-    @Session() session: UserSession,
-    @Param('id') parcelId: string,
-    @UploadedFile() file: Express.Multer.File,
-  ) {
-    if (!file) {
-      throw new BadRequestException('A file is required');
-    }
-    return this.analysesService.createImport(parcelId, session.user.id, file);
   }
 
   private parseResults(resultsJson?: string): AnalysisImageMeta[] {

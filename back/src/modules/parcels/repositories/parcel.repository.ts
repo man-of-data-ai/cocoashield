@@ -17,22 +17,36 @@ export class ParcelRepository {
   findByOwner(ownerId: string): Promise<Parcel[]> {
     return this.repository.find({
       where: { ownerId },
-      order: { createdAt: 'DESC' },
+      relations: { analyses: { images: true, mission: true } },
+      order: {
+        createdAt: 'DESC',
+        analyses: { createdAt: 'DESC' },
+      },
     });
   }
 
   findByIdAndOwner(id: string, ownerId: string): Promise<Parcel | null> {
     return this.repository.findOne({
       where: { id, ownerId },
-      relations: { analyses: { images: true }, imports: true },
-      order: {
-        analyses: { createdAt: 'DESC' },
-        imports: { createdAt: 'DESC' },
-      },
+      relations: { analyses: { images: true, mission: true } },
+      order: { analyses: { createdAt: 'DESC' } },
     });
   }
 
   async updateStatus(id: string, status: Parcel['status']): Promise<void> {
     await this.repository.update(id, { status });
+  }
+
+
+  async updateVerification(
+    id: string,
+    data: Pick<
+      Parcel,
+      | 'terrainVerificationStatus'
+      | 'terrainVerificationComment'
+      | 'terrainVerifiedAt'
+    >,
+  ): Promise<void> {
+    await this.repository.update(id, data);
   }
 }

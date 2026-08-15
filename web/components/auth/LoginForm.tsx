@@ -34,11 +34,8 @@ export default function LoginForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       <div>
-        <label
-          htmlFor="email"
-          className="block text-sm font-medium text-slate-700"
-        >
-          Email
+        <label htmlFor="email" className="block text-sm font-semibold text-slate-900">
+          Adresse e-mail
         </label>
         <input
           id="email"
@@ -47,15 +44,14 @@ export default function LoginForm({
           required
           value={email}
           onChange={(event) => setEmail(event.target.value)}
-          className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-2.5 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-          placeholder="vous@cadastre.fr"
+          className="mt-1.5 w-full rounded-2xl border border-[#DCE6D7] bg-[#FBFCFA] px-4 py-3.5 text-slate-900 outline-none transition focus:border-[#87B940] focus:bg-white focus:ring-2 focus:ring-[#87B940]/15"
         />
       </div>
 
       <div>
         <label
           htmlFor="password"
-          className="block text-sm font-medium text-slate-700"
+          className="block text-sm font-semibold text-slate-900"
         >
           Mot de passe
         </label>
@@ -66,8 +62,7 @@ export default function LoginForm({
           required
           value={password}
           onChange={(event) => setPassword(event.target.value)}
-          className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-2.5 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-          placeholder="••••••••"
+          className="mt-1.5 w-full rounded-2xl border border-[#DCE6D7] bg-[#FBFCFA] px-4 py-3.5 text-slate-900 outline-none transition focus:border-[#87B940] focus:bg-white focus:ring-2 focus:ring-[#87B940]/15"
         />
       </div>
 
@@ -76,7 +71,7 @@ export default function LoginForm({
       <button
         type="submit"
         disabled={isSubmitting}
-        className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+        className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#244B32] px-4 py-3.5 font-semibold text-white transition hover:bg-[#356A46] hover:shadow-[0_10px_24px_rgba(36,75,50,0.14)] disabled:cursor-not-allowed disabled:bg-slate-300"
       >
         {isSubmitting ? <Spinner label="Connexion..." /> : "Se connecter"}
       </button>

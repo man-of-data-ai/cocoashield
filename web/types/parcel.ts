@@ -5,6 +5,8 @@
 
 export type ParcelStatus = "not_analyzed" | "analyzing" | "sick" | "healthy";
 
+export type TerrainVerificationStatus = "pending" | "verified" | "false_positive";
+
 export type AnalysisStatus = "pending" | "processing" | "completed";
 
 export type AnalysisResult = "healthy" | "infected";
@@ -12,6 +14,15 @@ export type AnalysisResult = "healthy" | "infected";
 export type AnalysisImageSource = "mobile" | "upload";
 
 export type AnalysisImageStatus = "pending" | "processed" | "failed";
+
+/**
+ * Fiabilité de la position géographique attachée à une image :
+ * - "precise" : GPS lu depuis les métadonnées EXIF du fichier.
+ * - "approximate" : pas de GPS exploitable, position repliée sur le centre
+ *   de la parcelle.
+ * - "none" : aucune position disponible.
+ */
+export type GeolocationQuality = "precise" | "approximate" | "none";
 
 /**
  * Géométrie GeoJSON du contour d'une parcelle.
@@ -33,6 +44,17 @@ export type AnalysisImage = {
   confidence: number | null;
   latitude: number | null;
   longitude: number | null;
+  geolocationQuality: GeolocationQuality;
+};
+
+/** Campagne de collecte terrain regroupant une ou plusieurs analyses. */
+export type Mission = {
+  id: string;
+  createdAt: string;
+  ownerId: string;
+  name: string;
+  missionDate: string | null;
+  notes: string | null;
 };
 
 export type Analysis = {
@@ -43,15 +65,22 @@ export type Analysis = {
   result: AnalysisResult | null;
   notes: string | null;
   completedAt: string | null;
+  infectionPercentage: number | null;
+  severityLevel: "faible" | "modere" | "eleve" | "critique" | null;
+  affectedZones: Array<{
+    latitude: number;
+    longitude: number;
+    severity: number;
+    severityLevel?: "faible" | "modere" | "eleve" | "critique";
+    surfaceSquareMeters?: number | null;
+    geometry?: ParcelBoundary | null;
+  }> | null;
+  reportGeneratedAt: string | null;
   images: AnalysisImage[];
   parcel?: Parcel;
-};
-
-export type PendingImport = {
-  id: string;
-  createdAt: string;
-  originalName: string;
-  mimeType: string | null;
+  missionId: string | null;
+  profileId: string | null;
+  mission?: Mission | null;
 };
 
 export type Parcel = {
@@ -61,8 +90,10 @@ export type Parcel = {
   name: string;
   boundary: ParcelBoundary;
   status: ParcelStatus;
+  terrainVerificationStatus: TerrainVerificationStatus;
+  terrainVerificationComment: string | null;
+  terrainVerifiedAt: string | null;
   analyses?: Analysis[];
-  imports?: PendingImport[];
 };
 
 /**

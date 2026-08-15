@@ -21,7 +21,7 @@ const parcels = {
   root: '/parcels',
   byId: '/:id',
   analyses: '/:id/analyses',
-  imports: '/:id/imports',
+  verification: '/:id/verification',
 };
 
 const analyses = {
@@ -34,6 +34,22 @@ const analysisImages = {
   file: '/:id/file',
 };
 
+const exportsRoutes = {
+  root: '/exports',
+  generate: '/generate',
+};
+
+const audit = {
+  root: '/audit',
+};
+
+const configuration = { root: '/configuration' };
+
+const missions = {
+  root: '/missions',
+  byId: '/:id',
+};
+
 export const routes = {
   version: v1,
   betterAuthBasePath,
@@ -41,4 +57,8 @@ export const routes = {
   parcels,
   analyses,
   analysisImages,
+  missions,
+  exports: exportsRoutes,
+  audit,
+  configuration,
 };

@@ -1,7 +1,12 @@
 import { Column, Entity, Index, OneToMany } from 'typeorm';
 import { RestEntity } from '../../../libs/infrastructure/persistence/entities/rest.entity';
 import { Analysis } from '../../analyses/entities/analysis.entity';
-import { PendingImport } from '../../analyses/entities/pending-import.entity';
+
+export enum TerrainVerificationStatus {
+  PENDING = 'pending',
+  VERIFIED = 'verified',
+  FALSE_POSITIVE = 'false_positive',
+}
 
 export enum ParcelStatus {
   NOT_ANALYZED = 'not_analyzed',
@@ -38,9 +43,23 @@ export class Parcel extends RestEntity {
   })
   status: ParcelStatus;
 
+
+  @Column({
+    name: 'terrain_verification_status',
+    type: 'enum',
+    enum: TerrainVerificationStatus,
+    default: TerrainVerificationStatus.PENDING,
+  })
+  terrainVerificationStatus: TerrainVerificationStatus;
+
+  @Column({ name: 'terrain_verification_comment', type: 'text', nullable: true })
+  terrainVerificationComment: string | null;
+
+  @Column({ name: 'terrain_verified_at', type: 'timestamptz', nullable: true })
+  terrainVerifiedAt: Date | null;
+
   @OneToMany(() => Analysis, (analysis) => analysis.parcel)
   analyses: Analysis[];
 
-  @OneToMany(() => PendingImport, (pendingImport) => pendingImport.parcel)
-  imports: PendingImport[];
+
 }

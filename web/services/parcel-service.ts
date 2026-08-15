@@ -4,7 +4,7 @@
  */
 
 import { apiRequest } from "@/lib/api-client";
-import type { Parcel } from "@/types/parcel";
+import type { Parcel, TerrainVerificationStatus } from "@/types/parcel";
 
 export type CreateParcelInput = {
   name: string;
@@ -21,6 +21,18 @@ export const parcelService = {
   /** Récupère une parcelle et son historique d'analyses. */
   async getParcel(id: string): Promise<Parcel> {
     return apiRequest<Parcel>(`/v1/parcels/${id}`);
+  },
+
+  async updateVerification(
+    id: string,
+    status: TerrainVerificationStatus,
+    comment?: string
+  ): Promise<Parcel> {
+    return apiRequest<Parcel>(`/v1/parcels/${id}/verification`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status, comment }),
+    });
   },
 
   /** Crée une nouvelle parcelle à partir de son nom et de son contour. */

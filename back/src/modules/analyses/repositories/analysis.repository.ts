@@ -17,7 +17,7 @@ export class AnalysisRepository {
   findById(id: string): Promise<Analysis | null> {
     return this.repository.findOne({
       where: { id },
-      relations: { images: true, parcel: true },
+      relations: { images: true, parcel: true, mission: true },
     });
   }
 
