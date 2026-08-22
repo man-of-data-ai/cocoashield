@@ -24,7 +24,6 @@ import {
 import { Session } from '@thallesp/nestjs-better-auth';
 import type { UserSession } from '@thallesp/nestjs-better-auth';
 import { createReadStream } from 'fs';
-import { Constants } from '../../core/constants/constants';
 import {
   analysis_image_routes,
   analysis_routes,
@@ -42,7 +41,7 @@ import { UpdateAnalysisNotesDto } from './dtos/update-analysis-notes.dto';
 @ApiTags('Analyses')
 @AppRoles(UserRole.ADMINISTRATEUR, UserRole.AGRONOME_TERRAIN)
 @UseInterceptors(AuditInterceptor)
-@Controller(Constants.API.VERSION)
+@Controller()
 export class ParcelAnalysesController {
   constructor(private readonly analysesService: AnalysesService) {}
 
@@ -97,7 +96,7 @@ export class ParcelAnalysesController {
   UserRole.DIRECTION_CCC,
 )
 @UseInterceptors(AuditInterceptor)
-@Controller(Constants.API.VERSION)
+@Controller()
 export class AnalysesController {
   constructor(private readonly analysesService: AnalysesService) {}
 
@@ -163,7 +162,7 @@ export class AnalysesController {
   UserRole.AGRONOME_TERRAIN,
   UserRole.DIRECTION_CCC,
 )
-@Controller(Constants.API.VERSION)
+@Controller()
 export class AnalysisImagesController {
   constructor(private readonly analysesService: AnalysesService) {}
 

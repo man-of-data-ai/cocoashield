@@ -15,7 +15,6 @@ import {
 import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { Session } from '@thallesp/nestjs-better-auth';
 import type { UserSession } from '@thallesp/nestjs-better-auth';
-import { Constants } from '../../core/constants/constants';
 import { user_routes } from '../../routes';
 import { AuditInterceptor } from '../audit/audit.interceptor';
 import { Audit } from '../audit/decorators/audit.decorator';
@@ -29,7 +28,7 @@ import { UsersService } from './users.service';
 
 @ApiTags('Utilisateurs')
 @UseInterceptors(AuditInterceptor)
-@Controller(Constants.API.VERSION)
+@Controller()
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 

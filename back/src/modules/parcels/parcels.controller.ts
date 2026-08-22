@@ -20,7 +20,6 @@ import {
 } from '@nestjs/swagger';
 import { Session } from '@thallesp/nestjs-better-auth';
 import type { UserSession } from '@thallesp/nestjs-better-auth';
-import { Constants } from '../../core/constants/constants';
 import { parcel_routes } from '../../routes';
 import { AuditInterceptor } from '../audit/audit.interceptor';
 import { Audit } from '../audit/decorators/audit.decorator';
@@ -33,7 +32,7 @@ import { ParcelsService } from './parcels.service';
 @ApiTags('Parcelles')
 @AppRoles(UserRole.ADMINISTRATEUR, UserRole.AGRONOME_TERRAIN)
 @UseInterceptors(AuditInterceptor)
-@Controller(Constants.API.VERSION)
+@Controller()
 export class ParcelsController {
   constructor(private readonly parcelsService: ParcelsService) {}
 

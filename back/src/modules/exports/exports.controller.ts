@@ -10,7 +10,6 @@ import { ApiOperation, ApiProduces, ApiTags } from '@nestjs/swagger';
 import { Session } from '@thallesp/nestjs-better-auth';
 import type { UserSession } from '@thallesp/nestjs-better-auth';
 import type { Response } from 'express';
-import { Constants } from '../../core/constants/constants';
 import { export_routes } from '../../routes';
 import { AuditInterceptor } from '../audit/audit.interceptor';
 import { Audit } from '../audit/decorators/audit.decorator';
@@ -22,7 +21,7 @@ import { ExportsService } from './exports.service';
 @ApiTags('Exports')
 @AppRoles(UserRole.ADMINISTRATEUR)
 @UseInterceptors(AuditInterceptor)
-@Controller(Constants.API.VERSION)
+@Controller()
 export class ExportsController {
   constructor(private readonly exportsService: ExportsService) {}
 

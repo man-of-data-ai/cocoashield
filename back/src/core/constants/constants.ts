@@ -10,10 +10,10 @@ export class Constants {
   };
 
   /**
-   * API versioning. Porté par le préfixe des contrôleurs : chaque fichier
-   * `routes.ts` de module décrit des chemins relatifs à cette version.
+   * Versions de l'API. Chaque chemin de `src/routes.ts` porte la sienne :
+   * ajouter une V2 n'oblige pas à toucher aux routes existantes.
    */
   static API = {
-    VERSION: 'v1',
+    V1: 'v1',
   };
 }

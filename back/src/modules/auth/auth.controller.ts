@@ -3,13 +3,12 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AllowAnonymous, AuthService } from '@thallesp/nestjs-better-auth';
 import type { Auth } from './auth.provider';
 import { RegisterDto } from './dto/register.dto';
-import { Constants } from '../../core/constants/constants';
 import { auth_routes } from '../../routes';
 import { UsersService } from '../users/users.service';
 
 @ApiTags('Authentification')
 @AllowAnonymous()
-@Controller(Constants.API.VERSION)
+@Controller()
 export class AuthController {
   constructor(
     private readonly authService: AuthService,

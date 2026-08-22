@@ -1,6 +1,5 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { Constants } from '../../core/constants/constants';
 import { audit_routes } from '../../routes';
 import { AppRoles } from '../users/decorators/app-roles.decorator';
 import { UserRole } from '../users/entities/user-profile.entity';
@@ -9,7 +8,7 @@ import { ListAuditDto } from './dtos/list-audit.dto';
 
 @ApiTags('Audit')
 @AppRoles(UserRole.ADMINISTRATEUR, UserRole.DIRECTION_CCC)
-@Controller(Constants.API.VERSION)
+@Controller()
 export class AuditController {
   constructor(private readonly auditService: AuditService) {}
 
