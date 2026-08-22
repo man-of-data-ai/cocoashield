@@ -2,7 +2,10 @@ import {
   Body,
   Controller,
   DefaultValuePipe,
+  Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseBoolPipe,
   ParseUUIDPipe,
@@ -84,5 +87,34 @@ export class PlatformConfigController {
     @Body() dto: UpdateDroneProfileDto,
   ) {
     return this.configService.updateDroneProfile(session.user.id, id, dto);
+  }
+
+  @Delete(routes.configuration.droneProfileById)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Audit({
+    action: 'drone_profile.deleted',
+    targetType: 'drone_profile',
+    targetIdParam: 'id',
+  })
+  @ApiOperation({ summary: 'Supprimer un profil drone (réversible)' })
+  removeProfile(
+    @Session() session: UserSession,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.configService.softDeleteDroneProfile(session.user.id, id);
+  }
+
+  @Post(routes.configuration.droneProfileRestoreById)
+  @Audit({
+    action: 'drone_profile.restored',
+    targetType: 'drone_profile',
+    targetIdParam: 'id',
+  })
+  @ApiOperation({ summary: 'Restaurer un profil drone supprimé' })
+  restoreProfile(
+    @Session() session: UserSession,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.configService.restoreDroneProfile(session.user.id, id);
   }
 }

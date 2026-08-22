@@ -1,6 +1,13 @@
 import { Column, Entity, Index } from 'typeorm';
 import { RestEntity } from '../../../libs/infrastructure/persistence/entities/rest.entity';
 
+/**
+ * Journal d'audit.
+ *
+ * Hérite de `deletedAt` comme toutes les entités, mais **aucun code ne le
+ * supprime** : un registre d'audit effaçable ne prouve plus rien. La colonne
+ * reste nulle, et aucune route n'expose de suppression.
+ */
 @Entity('audit_log')
 export class AuditLog extends RestEntity {
   @Index()

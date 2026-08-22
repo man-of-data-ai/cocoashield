@@ -18,6 +18,7 @@ const users = {
   meProfile: '/me/profile',
   byId: '/:id',
   profileById: '/:id/profile',
+  restoreById: '/:id/restore',
 };
 
 const parcels = {
@@ -25,11 +26,13 @@ const parcels = {
   byId: '/:id',
   analyses: '/:id/analyses',
   verification: '/:id/verification',
+  restoreById: '/:id/restore',
 };
 
 const analyses = {
   root: '/analyses',
   byId: '/:id',
+  restoreById: '/:id/restore',
 };
 
 const analysisImages = {
@@ -52,11 +55,13 @@ const configuration = {
   settings: '/settings',
   droneProfiles: '/drone-profiles',
   droneProfileById: '/drone-profiles/:id',
+  droneProfileRestoreById: '/drone-profiles/:id/restore',
 };
 
 const missions = {
   root: '/missions',
   byId: '/:id',
+  restoreById: '/:id/restore',
 };
 
 export const routes = {

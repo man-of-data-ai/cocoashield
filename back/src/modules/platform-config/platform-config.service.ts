@@ -138,4 +138,38 @@ export class PlatformConfigService {
     Object.assign(profile, dto);
     return this.droneRepository.save(profile);
   }
+
+  /**
+   * Suppression réversible d'un profil drone. Les analyses conservent leur
+   * `profile_id` : elles documentent le matériel réellement utilisé, y
+   * compris pour un profil retiré du catalogue.
+   */
+  async softDeleteDroneProfile(ownerId: string, id: string): Promise<void> {
+    const profile = await this.droneRepository.findOne({
+      where: { id, ownerId },
+    });
+    if (!profile) {
+      throw new NotFoundException('Profil drone introuvable.');
+    }
+    await this.droneRepository.softDelete(id);
+  }
+
+  async restoreDroneProfile(
+    ownerId: string,
+    id: string,
+  ): Promise<DroneProfile> {
+    const profile = await this.droneRepository.findOne({
+      where: { id, ownerId },
+      withDeleted: true,
+    });
+    if (!profile) {
+      throw new NotFoundException('Profil drone introuvable.');
+    }
+    if (!profile.deletedAt) {
+      throw new BadRequestException("Ce profil drone n'est pas supprimé.");
+    }
+    await this.droneRepository.restore(id);
+    profile.deletedAt = null;
+    return profile;
+  }
 }

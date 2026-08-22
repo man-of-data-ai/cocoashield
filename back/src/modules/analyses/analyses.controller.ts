@@ -2,7 +2,10 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -115,6 +118,37 @@ export class AnalysesController {
     @Body() dto: UpdateAnalysisNotesDto,
   ) {
     return this.analysesService.updateNotes(id, session.user.id, dto.notes);
+  }
+
+  @Delete(routes.analyses.byId)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @AppRoles(UserRole.ADMINISTRATEUR, UserRole.AGRONOME_TERRAIN)
+  @Audit({
+    action: 'analysis.deleted',
+    targetType: 'analysis',
+    targetIdParam: 'id',
+  })
+  @ApiOperation({ summary: 'Supprimer une analyse (réversible)' })
+  remove(
+    @Session() session: UserSession,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.analysesService.softDelete(id, session.user.id);
+  }
+
+  @Post(routes.analyses.restoreById)
+  @AppRoles(UserRole.ADMINISTRATEUR, UserRole.AGRONOME_TERRAIN)
+  @Audit({
+    action: 'analysis.restored',
+    targetType: 'analysis',
+    targetIdParam: 'id',
+  })
+  @ApiOperation({ summary: 'Restaurer une analyse supprimée' })
+  restore(
+    @Session() session: UserSession,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.analysesService.restore(id, session.user.id);
   }
 }
 

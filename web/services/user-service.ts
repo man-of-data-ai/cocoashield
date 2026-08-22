@@ -31,8 +31,10 @@ export const userService = {
       status: "active",
     });
   },
-  list(): Promise<AppUser[]> {
-    return apiRequest<AppUser[]>("/v1/users");
+  list(includeDeleted = false): Promise<AppUser[]> {
+    return apiRequest<AppUser[]>(
+      `/v1/users${includeDeleted ? "?includeDeleted=true" : ""}`,
+    );
   },
   me(): Promise<CurrentUserProfile> {
     return apiRequest<CurrentUserProfile>("/v1/users/me/profile");
@@ -51,9 +53,13 @@ export const userService = {
       body: JSON.stringify(input),
     });
   },
+  /** Suppression réversible : le compte reste restaurable. */
   remove(id: string): Promise<{ id: string; deleted: boolean }> {
     return apiRequest<{ id: string; deleted: boolean }>(`/v1/users/${id}`, {
       method: "DELETE",
     });
+  },
+  restore(id: string): Promise<AppUser> {
+    return apiRequest<AppUser>(`/v1/users/${id}/restore`, { method: "POST" });
   },
 };

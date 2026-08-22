@@ -21,7 +21,24 @@ export class AnalysisRepository {
     });
   }
 
+  /** Recherche incluant les analyses supprimées — réservé à la restauration. */
+  findDeletedById(id: string): Promise<Analysis | null> {
+    return this.repository.findOne({
+      where: { id },
+      relations: { parcel: true },
+      withDeleted: true,
+    });
+  }
+
   async update(id: string, data: Partial<Analysis>): Promise<void> {
     await this.repository.update(id, data);
+  }
+
+  async softDelete(id: string): Promise<void> {
+    await this.repository.softDelete(id);
+  }
+
+  async restore(id: string): Promise<void> {
+    await this.repository.restore(id);
   }
 }

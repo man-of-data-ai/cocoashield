@@ -56,38 +56,65 @@ export class UsersService {
   }
 
   /**
-   * Lecture seule du profil : renvoie le profil implicite si le compte n'a
-   * pas encore de ligne applicative, sans jamais écrire.
+   * Lecture seule du profil, sans jamais écrire.
+   *
+   * `withDeleted` est indispensable ici : sans lui, un profil soft-deleted
+   * serait introuvable et retomberait sur le profil implicite — un compte
+   * supprimé récupérerait donc un rôle actif. Le `deletedAt` est renvoyé pour
+   * que l'appelant puisse refuser explicitement.
    */
   async resolveProfile(
     userId: string,
-  ): Promise<Pick<UserProfile, 'role' | 'cooperative' | 'status'>> {
-    const profile = await this.profiles.findOne({ where: { userId } });
-    return profile ?? { ...IMPLICIT_PROFILE };
+  ): Promise<
+    Pick<UserProfile, 'role' | 'cooperative' | 'status' | 'deletedAt'>
+  > {
+    const profile = await this.profiles.findOne({
+      where: { userId },
+      withDeleted: true,
+    });
+    return profile ?? { ...IMPLICIT_PROFILE, deletedAt: null };
   }
 
-  current(userId: string) {
-    return this.resolveProfile(userId);
+  /** Un compte supprimé ne peut plus ni se connecter ni utiliser l'API. */
+  async isDeleted(userId: string): Promise<boolean> {
+    const profile = await this.resolveProfile(userId);
+    return profile.deletedAt !== null;
   }
 
-  async list() {
+  /** Profil de l'utilisateur connecté, projeté sur les seuls champs utiles. */
+  async current(userId: string) {
+    const { role, cooperative, status } = await this.resolveProfile(userId);
+    return { role, cooperative, status };
+  }
+
+  /**
+   * Liste des comptes. Les comptes supprimés ne sont renvoyés que sur demande
+   * explicite (`includeDeleted`), pour permettre leur restauration.
+   */
+  async list(includeDeleted = false) {
     const users = await this.dataSource.query<AuthUserRow[]>(
       `SELECT ${AUTH_USER_COLUMNS} FROM "user" ORDER BY "createdAt" DESC`,
     );
-    const profiles = await this.profiles.find();
+    const profiles = await this.profiles.find({ withDeleted: true });
     const byUserId = new Map(
       profiles.map((profile) => [profile.userId, profile]),
     );
 
-    return users.map((user) => {
-      const profile = byUserId.get(user.id) ?? IMPLICIT_PROFILE;
-      return {
-        ...user,
-        role: profile.role,
-        cooperative: profile.cooperative,
-        status: profile.status,
-      };
-    });
+    return users
+      .map((user) => {
+        const profile = byUserId.get(user.id) ?? {
+          ...IMPLICIT_PROFILE,
+          deletedAt: null,
+        };
+        return {
+          ...user,
+          role: profile.role,
+          cooperative: profile.cooperative,
+          status: profile.status,
+          deletedAt: profile.deletedAt,
+        };
+      })
+      .filter((user) => includeDeleted || user.deletedAt === null);
   }
 
   /**
@@ -160,6 +187,17 @@ export class UsersService {
     return this.update(userId, dto);
   }
 
+  /**
+   * Suppression réversible d'un compte.
+   *
+   * Le profil est soft-deleted et son statut passé à `inactive`. Le compte
+   * better-auth et ses écritures sont conservés : sans eux, le journal
+   * d'audit perdrait l'identité derrière chaque action passée.
+   *
+   * Les **sessions sont révoquées physiquement** : un jeton de session est un
+   * droit d'accès vivant, pas une donnée d'historique. Sans cette révocation,
+   * un compte supprimé resterait connecté jusqu'à expiration de son cookie.
+   */
   async deleteAsAdmin(actorId: string, userId: string) {
     if (actorId === userId) {
       throw new BadRequestException(
@@ -167,23 +205,48 @@ export class UsersService {
       );
     }
     await this.findAuthUser(userId);
+    if (await this.isDeleted(userId)) {
+      throw new BadRequestException('Ce compte est déjà supprimé.');
+    }
     await this.assertAdminContinuity(userId, undefined, UserStatus.INACTIVE);
 
+    const profile = await this.createProfile(userId);
+    profile.status = UserStatus.INACTIVE;
+    await this.profiles.save(profile);
+
     await this.dataSource.transaction(async (manager) => {
-      // Colonnes better-auth en camelCase (créées par la librairie), colonne
-      // applicative en snake_case (convention TypeORM du projet).
-      await manager.query(`DELETE FROM app_user_profile WHERE user_id = $1`, [
-        userId,
-      ]);
+      await manager.softDelete(UserProfile, { userId });
       await manager.query(`DELETE FROM "session" WHERE "userId" = $1`, [
         userId,
       ]);
-      await manager.query(`DELETE FROM "account" WHERE "userId" = $1`, [
-        userId,
-      ]);
-      await manager.query(`DELETE FROM "user" WHERE id = $1`, [userId]);
     });
 
     return { id: userId, deleted: true };
+  }
+
+  /** Réactive un compte précédemment supprimé. */
+  async restoreAsAdmin(userId: string) {
+    const user = await this.findAuthUser(userId);
+    const profile = await this.profiles.findOne({
+      where: { userId },
+      withDeleted: true,
+    });
+
+    if (!profile?.deletedAt) {
+      throw new BadRequestException("Ce compte n'est pas supprimé.");
+    }
+
+    await this.profiles.restore({ userId });
+    profile.deletedAt = null;
+    profile.status = UserStatus.ACTIVE;
+    const saved = await this.profiles.save(profile);
+
+    return {
+      ...user,
+      role: saved.role,
+      cooperative: saved.cooperative,
+      status: saved.status,
+      deletedAt: null,
+    };
   }
 }

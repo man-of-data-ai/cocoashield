@@ -178,6 +178,27 @@ export class AnalysesService {
     };
   }
 
+  /**
+   * Suppression réversible d'une analyse. Les images restent sur le disque et
+   * en base : ce sont les pièces justificatives de l'analyse.
+   */
+  async softDelete(id: string, ownerId: string): Promise<void> {
+    await this.findOneForOwner(id, ownerId);
+    await this.analysisRepository.softDelete(id);
+  }
+
+  async restore(id: string, ownerId: string): Promise<Analysis> {
+    const analysis = await this.analysisRepository.findDeletedById(id);
+    if (!analysis || analysis.parcel.ownerId !== ownerId) {
+      throw new NotFoundException('Analyse introuvable.');
+    }
+    if (!analysis.deletedAt) {
+      throw new BadRequestException("Cette analyse n'est pas supprimée.");
+    }
+    await this.analysisRepository.restore(id);
+    return this.findOneForOwner(id, ownerId);
+  }
+
   /** Appelé par l'ImageInferenceProcessor après le traitement de chaque image. */
   async finalizeIfDone(analysisId: string): Promise<void> {
     const analysis = await this.findOne(analysisId);

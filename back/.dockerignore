@@ -7,3 +7,6 @@ uploads
 better-auth_migrations
 test
 *.md
+coverage
+*.log
+.git

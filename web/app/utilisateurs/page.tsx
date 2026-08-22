@@ -10,6 +10,7 @@ import {
   Building2,
   CheckCircle2,
   Plus,
+  RotateCcw,
   Trash2,
   AlertTriangle,
 } from "lucide-react";
@@ -86,10 +87,13 @@ export default function UsersPage() {
   } | null>(null);
   const [pendingDelete, setPendingDelete] = useState<AppUser | null>(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [showDeleted, setShowDeleted] = useState(false);
 
   useEffect(() => {
+    // Les comptes supprimés sont chargés pour rester restaurables ; ils sont
+    // masqués par défaut dans la liste.
     userService
-      .list()
+      .list(true)
       .then(setUsers)
       .catch((err) =>
         setError(
@@ -109,9 +113,17 @@ export default function UsersPage() {
         `${user.name} ${user.email} ${user.cooperative ?? ""}`
           .toLowerCase()
           .includes(needle);
-      return matchesText && (role === "all" || user.role === role);
+      const matchesDeleted = showDeleted ? true : !user.deletedAt;
+      return (
+        matchesText && matchesDeleted && (role === "all" || user.role === role)
+      );
     });
-  }, [users, query, role]);
+  }, [users, query, role, showDeleted]);
+
+  const deletedCount = useMemo(
+    () => users.filter((user) => user.deletedAt).length,
+    [users],
+  );
 
   async function updateRole(user: AppUser, nextRole: string) {
     setSavingId(user.id);
@@ -139,6 +151,25 @@ export default function UsersPage() {
     setPendingRole(null);
   }
 
+  async function restoreUser(user: AppUser) {
+    setSavingId(user.id);
+    setError(null);
+    try {
+      const restored = await userService.restore(user.id);
+      setUsers((current) =>
+        current.map((item) => (item.id === user.id ? restored : item)),
+      );
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "La restauration du compte a échoué.",
+      );
+    } finally {
+      setSavingId(null);
+    }
+  }
+
   async function deleteUser() {
     if (
       !pendingDelete ||
@@ -149,8 +180,18 @@ export default function UsersPage() {
     setError(null);
     try {
       await userService.remove(pendingDelete.id);
+      // Le compte reste dans la liste, marqué comme supprimé : il est
+      // restaurable tant qu'un administrateur ne l'a pas purgé.
       setUsers((current) =>
-        current.filter((item) => item.id !== pendingDelete.id),
+        current.map((item) =>
+          item.id === pendingDelete.id
+            ? {
+                ...item,
+                deletedAt: new Date().toISOString(),
+                status: "inactive",
+              }
+            : item,
+        ),
       );
       setPendingDelete(null);
       setDeleteConfirmation("");
@@ -303,6 +344,21 @@ export default function UsersPage() {
               ]}
               className="sm:w-60"
             />
+            {deletedCount > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowDeleted((current) => !current)}
+                className={`inline-flex h-11 items-center gap-2 rounded-2xl border px-4 text-sm font-semibold transition ${
+                  showDeleted
+                    ? "border-[#AFC9A3] bg-[#F2F7EE] text-[#244B32]"
+                    : "border-[#DDE6D9] bg-white text-slate-500 hover:bg-[#FAFCF8]"
+                }`}
+              >
+                <RotateCcw className="h-4 w-4" />
+                {showDeleted ? "Masquer" : "Afficher"} les comptes supprimés (
+                {deletedCount})
+              </button>
+            )}
           </div>
         </div>
 
@@ -356,7 +412,11 @@ export default function UsersPage() {
                     <td className="px-5 py-4">
                       <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700">
                         <CheckCircle2 className="h-3.5 w-3.5" />
-                        {user.status === "active" ? "Actif" : "Inactif"}
+                        {user.deletedAt
+                          ? "Supprimé"
+                          : user.status === "active"
+                            ? "Actif"
+                            : "Inactif"}
                       </span>
                     </td>
                     <td className="px-5 py-4">
@@ -375,18 +435,31 @@ export default function UsersPage() {
                           disabled={savingId === user.id}
                           className="w-56"
                         />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setPendingDelete(user);
-                            setDeleteConfirmation("");
-                          }}
-                          disabled={savingId === user.id}
-                          className="flex h-10 w-10 items-center justify-center rounded-xl border border-red-100 bg-red-50 text-red-500 transition hover:bg-red-100 disabled:opacity-40"
-                          aria-label={`Supprimer ${user.name}`}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                        {user.deletedAt ? (
+                          <button
+                            type="button"
+                            onClick={() => void restoreUser(user)}
+                            disabled={savingId === user.id}
+                            className="flex h-10 items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50 px-3 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-40"
+                            aria-label={`Restaurer ${user.name}`}
+                          >
+                            <RotateCcw className="h-4 w-4" />
+                            Restaurer
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPendingDelete(user);
+                              setDeleteConfirmation("");
+                            }}
+                            disabled={savingId === user.id}
+                            className="flex h-10 w-10 items-center justify-center rounded-xl border border-red-100 bg-red-50 text-red-500 transition hover:bg-red-100 disabled:opacity-40"
+                            aria-label={`Supprimer ${user.name}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -580,10 +653,13 @@ export default function UsersPage() {
               <div className="flex items-start gap-3">
                 <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
                 <div>
-                  <p className="font-bold">Cette action est irréversible.</p>
+                  <p className="font-bold">
+                    Le compte sera désactivé et ses sessions révoquées.
+                  </p>
                   <p className="mt-1 text-xs leading-5">
-                    Le compte de {pendingDelete.name} sera définitivement
-                    supprimé.
+                    {pendingDelete.name} ne pourra plus se connecter. Son
+                    historique est conservé pour le journal d&apos;audit et le
+                    compte reste restaurable.
                   </p>
                 </div>
               </div>
@@ -621,7 +697,7 @@ export default function UsersPage() {
                 }
                 className="rounded-xl bg-red-600 px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40"
               >
-                Supprimer définitivement
+                Supprimer le compte
               </button>
             </div>
           </div>

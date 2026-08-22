@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { CreateMissionDto } from './dtos/create-mission.dto';
 import { Mission } from './entities/mission.entity';
 import { MissionRepository } from './repositories/mission.repository';
@@ -59,5 +63,30 @@ export class MissionsService {
       missionDate: new Date(),
       notes: null,
     });
+  }
+
+  /**
+   * Suppression réversible. Les analyses gardent leur `mission_id` : la
+   * relation est en `SET NULL` uniquement sur suppression physique, que l'on
+   * ne pratique pas ici.
+   */
+  async softDelete(id: string, ownerId: string): Promise<void> {
+    await this.findOneForOwner(id, ownerId);
+    await this.missionRepository.softDelete(id);
+  }
+
+  async restore(id: string, ownerId: string): Promise<Mission> {
+    const mission = await this.missionRepository.findDeletedByIdAndOwner(
+      id,
+      ownerId,
+    );
+    if (!mission) {
+      throw new NotFoundException('Mission introuvable.');
+    }
+    if (!mission.deletedAt) {
+      throw new BadRequestException("Cette mission n'est pas supprimée.");
+    }
+    await this.missionRepository.restore(id);
+    return this.findOneForOwner(id, ownerId);
   }
 }

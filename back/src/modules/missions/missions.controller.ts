@@ -1,4 +1,15 @@
-import { Body, Controller, Get, Post, UseInterceptors } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  UseInterceptors,
+} from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Session } from '@thallesp/nestjs-better-auth';
 import type { UserSession } from '@thallesp/nestjs-better-auth';
@@ -28,5 +39,34 @@ export class MissionsController {
   @ApiOperation({ summary: "Lister les missions de l'utilisateur" })
   findAll(@Session() session: UserSession) {
     return this.missionsService.findAllForOwner(session.user.id);
+  }
+
+  @Delete(routes.missions.byId)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Audit({
+    action: 'mission.deleted',
+    targetType: 'mission',
+    targetIdParam: 'id',
+  })
+  @ApiOperation({ summary: 'Supprimer une mission (réversible)' })
+  remove(
+    @Session() session: UserSession,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.missionsService.softDelete(id, session.user.id);
+  }
+
+  @Post(routes.missions.restoreById)
+  @Audit({
+    action: 'mission.restored',
+    targetType: 'mission',
+    targetIdParam: 'id',
+  })
+  @ApiOperation({ summary: 'Restaurer une mission supprimée' })
+  restore(
+    @Session() session: UserSession,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.missionsService.restore(id, session.user.id);
   }
 }

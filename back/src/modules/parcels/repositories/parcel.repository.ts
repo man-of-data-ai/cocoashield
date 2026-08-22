@@ -44,6 +44,25 @@ export class ParcelRepository {
     await this.repository.update(id, { status });
   }
 
+  /**
+   * Recherche incluant les parcelles supprimées — réservé à la restauration.
+   */
+  findDeletedByIdAndOwner(id: string, ownerId: string): Promise<Parcel | null> {
+    return this.repository.findOne({
+      where: { id, ownerId },
+      withDeleted: true,
+    });
+  }
+
+  /** Soft delete : la parcelle et ses analyses restent en base. */
+  async softDelete(id: string): Promise<void> {
+    await this.repository.softDelete(id);
+  }
+
+  async restore(id: string): Promise<void> {
+    await this.repository.restore(id);
+  }
+
   async updateVerification(
     id: string,
     data: Pick<

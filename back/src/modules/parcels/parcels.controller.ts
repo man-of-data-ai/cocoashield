@@ -1,7 +1,10 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -10,6 +13,7 @@ import {
 } from '@nestjs/common';
 import {
   ApiCreatedResponse,
+  ApiNoContentResponse,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
@@ -74,5 +78,40 @@ export class ParcelsController {
       dto.status,
       dto.comment,
     );
+  }
+
+  @Delete(routes.parcels.byId)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Audit({
+    action: 'parcel.deleted',
+    targetType: 'parcel',
+    targetIdParam: 'id',
+  })
+  @ApiOperation({
+    summary: 'Supprimer une parcelle (réversible)',
+    description:
+      'Suppression logique : la parcelle disparaît des listes mais reste en base, ' +
+      'avec ses analyses. Restaurable via POST /:id/restore.',
+  })
+  @ApiNoContentResponse({ description: 'Parcelle supprimée.' })
+  remove(
+    @Session() session: UserSession,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.parcelsService.softDelete(id, session.user.id);
+  }
+
+  @Post(routes.parcels.restoreById)
+  @Audit({
+    action: 'parcel.restored',
+    targetType: 'parcel',
+    targetIdParam: 'id',
+  })
+  @ApiOperation({ summary: 'Restaurer une parcelle supprimée' })
+  restore(
+    @Session() session: UserSession,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.parcelsService.restore(id, session.user.id);
   }
 }

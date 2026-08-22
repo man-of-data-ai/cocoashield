@@ -1,0 +1,73 @@
+# Socle de l'environnement de développement local. À utiliser avec le fichier
+# dédié plutôt que seul :
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+#
+# La production ne passe pas par ici : elle est décrite par
+# deploy/docker-compose.prod.yml et déployée par .github/workflows/deploy.yml.
+
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USERNAME:-cocoashield}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-cocoashield}
+      POSTGRES_DB: ${DB_NAME:-cocoashield}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-cocoashield}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  back:
+    build:
+      context: ./back
+    restart: unless-stopped
+    environment:
+      APP_NAME: cocoashield-back
+      PORT: 3000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-cocoashield}
+      DB_USERNAME: ${DB_USERNAME:-cocoashield}
+      DB_PASSWORD: ${DB_PASSWORD:-cocoashield}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET est obligatoire}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
+      WEB_URL: ${WEB_URL:-http://localhost:3002}
+      UPLOADS_DIR: /app/uploads
+    volumes:
+      - uploads_data:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ./web
+    restart: unless-stopped
+    environment:
+      BACKEND_URL: http://back:3000
+    depends_on:
+      - back
+
+volumes:
+  postgres_data:
+  redis_data:
+  uploads_data:

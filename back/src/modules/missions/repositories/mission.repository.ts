@@ -28,4 +28,23 @@ export class MissionRepository {
   findByNameAndOwner(name: string, ownerId: string): Promise<Mission | null> {
     return this.repository.findOne({ where: { name, ownerId } });
   }
+
+  /** Recherche incluant les missions supprimées — réservé à la restauration. */
+  findDeletedByIdAndOwner(
+    id: string,
+    ownerId: string,
+  ): Promise<Mission | null> {
+    return this.repository.findOne({
+      where: { id, ownerId },
+      withDeleted: true,
+    });
+  }
+
+  async softDelete(id: string): Promise<void> {
+    await this.repository.softDelete(id);
+  }
+
+  async restore(id: string): Promise<void> {
+    await this.repository.restore(id);
+  }
 }

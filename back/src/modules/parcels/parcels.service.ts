@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { CreateParcelDto } from './dtos/create-parcel.dto';
 import {
   Parcel,
@@ -59,6 +63,31 @@ export class ParcelsService {
         status === TerrainVerificationStatus.PENDING ? null : new Date(),
     });
 
+    return this.findOneForOwner(id, ownerId);
+  }
+
+  /**
+   * Suppression réversible. Les analyses rattachées restent en base : elles
+   * portent l'historique sanitaire, qui doit survivre au retrait d'une
+   * parcelle de l'interface.
+   */
+  async softDelete(id: string, ownerId: string): Promise<void> {
+    await this.findOneForOwner(id, ownerId);
+    await this.parcelRepository.softDelete(id);
+  }
+
+  async restore(id: string, ownerId: string): Promise<Parcel> {
+    const parcel = await this.parcelRepository.findDeletedByIdAndOwner(
+      id,
+      ownerId,
+    );
+    if (!parcel) {
+      throw new NotFoundException('Parcelle introuvable.');
+    }
+    if (!parcel.deletedAt) {
+      throw new BadRequestException("Cette parcelle n'est pas supprimée.");
+    }
+    await this.parcelRepository.restore(id);
     return this.findOneForOwner(id, ownerId);
   }
 
