@@ -2,7 +2,7 @@ import { betterAuth } from 'better-auth';
 import { APIError } from 'better-auth/api';
 import { username } from 'better-auth/plugins';
 import { Pool } from 'pg';
-import { auth_routes } from './routes';
+import { auth_routes } from '../../routes';
 
 /**
  * Configuration nécessaire à better-auth.

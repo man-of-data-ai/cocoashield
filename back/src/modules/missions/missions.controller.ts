@@ -14,7 +14,7 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Session } from '@thallesp/nestjs-better-auth';
 import type { UserSession } from '@thallesp/nestjs-better-auth';
 import { Constants } from '../../core/constants/constants';
-import { mission_routes } from './routes';
+import { mission_routes } from '../../routes';
 import { AuditInterceptor } from '../audit/audit.interceptor';
 import { Audit } from '../audit/decorators/audit.decorator';
 import { AppRoles } from '../users/decorators/app-roles.decorator';

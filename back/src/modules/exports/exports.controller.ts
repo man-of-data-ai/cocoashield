@@ -11,7 +11,7 @@ import { Session } from '@thallesp/nestjs-better-auth';
 import type { UserSession } from '@thallesp/nestjs-better-auth';
 import type { Response } from 'express';
 import { Constants } from '../../core/constants/constants';
-import { export_routes } from './routes';
+import { export_routes } from '../../routes';
 import { AuditInterceptor } from '../audit/audit.interceptor';
 import { Audit } from '../audit/decorators/audit.decorator';
 import { AppRoles } from '../users/decorators/app-roles.decorator';

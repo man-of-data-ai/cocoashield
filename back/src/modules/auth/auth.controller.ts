@@ -4,7 +4,7 @@ import { AllowAnonymous, AuthService } from '@thallesp/nestjs-better-auth';
 import type { Auth } from './auth.provider';
 import { RegisterDto } from './dto/register.dto';
 import { Constants } from '../../core/constants/constants';
-import { auth_routes } from './routes';
+import { auth_routes } from '../../routes';
 import { UsersService } from '../users/users.service';
 
 @ApiTags('Authentification')

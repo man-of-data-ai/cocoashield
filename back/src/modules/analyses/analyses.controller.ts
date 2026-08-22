@@ -25,8 +25,11 @@ import { Session } from '@thallesp/nestjs-better-auth';
 import type { UserSession } from '@thallesp/nestjs-better-auth';
 import { createReadStream } from 'fs';
 import { Constants } from '../../core/constants/constants';
-import { parcel_routes } from '../parcels/routes';
-import { analysis_image_routes, analysis_routes } from './routes';
+import {
+  analysis_image_routes,
+  analysis_routes,
+  parcel_routes,
+} from '../../routes';
 import { AuditInterceptor } from '../audit/audit.interceptor';
 import { Audit } from '../audit/decorators/audit.decorator';
 import { AppRoles } from '../users/decorators/app-roles.decorator';
