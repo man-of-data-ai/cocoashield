@@ -9,6 +9,7 @@ import {
 import { RestEntity } from '../../../libs/infrastructure/persistence/entities/rest.entity';
 import { Mission } from '../../missions/entities/mission.entity';
 import { Parcel } from '../../parcels/entities/parcel.entity';
+import { SeverityLevel } from '../../platform-config/severity';
 import { AnalysisImage } from './analysis-image.entity';
 import { AnalysisResult } from './analysis-result.enum';
 
@@ -53,15 +54,20 @@ export class Analysis extends RestEntity {
   @Column({ name: 'infection_percentage', type: 'float', nullable: true })
   infectionPercentage: number | null;
 
-  @Column({ name: 'severity_level', type: 'varchar', nullable: true })
-  severityLevel: string | null;
+  @Column({
+    name: 'severity_level',
+    type: 'enum',
+    enum: SeverityLevel,
+    nullable: true,
+  })
+  severityLevel: SeverityLevel | null;
 
   @Column({ name: 'affected_zones', type: 'jsonb', nullable: true })
   affectedZones: Array<{
     latitude: number;
     longitude: number;
     severity: number;
-    severityLevel?: 'faible' | 'modere' | 'eleve' | 'critique';
+    severityLevel?: SeverityLevel;
     surfaceSquareMeters?: number | null;
     geometry?: { type: 'Polygon'; coordinates: number[][][] } | null;
   }> | null;

@@ -1,5 +1,6 @@
 import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from '@thallesp/nestjs-better-auth';
 import { AppController } from './app.controller';
@@ -14,6 +15,7 @@ import { MissionsModule } from './modules/missions/missions.module';
 import { ExportsModule } from './modules/exports/exports.module';
 import { ParcelsModule } from './modules/parcels/parcels.module';
 import { PlatformConfigModule } from './modules/platform-config/platform-config.module';
+import { AppRolesGuard } from './modules/users/guards/app-roles.guard';
 import { UsersModule } from './modules/users/users.module';
 
 @Module({
@@ -44,6 +46,12 @@ import { UsersModule } from './modules/users/users.module';
     UsersModule,
   ],
   controllers: [AppController, AuthController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    // Autorisation métier appliquée à chaque requête, après l'AuthGuard de
+    // better-auth. Enregistrée globalement pour qu'aucune route ne puisse
+    // être exposée en oubliant de la déclarer.
+    { provide: APP_GUARD, useClass: AppRolesGuard },
+  ],
 })
 export class AppModule {}

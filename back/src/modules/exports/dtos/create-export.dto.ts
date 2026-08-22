@@ -5,7 +5,6 @@ import {
   IsDateString,
   IsEnum,
   IsOptional,
-  IsString,
   IsUUID,
 } from 'class-validator';
 import { ExportFormat, ExportScope } from '../entities/export-record.entity';

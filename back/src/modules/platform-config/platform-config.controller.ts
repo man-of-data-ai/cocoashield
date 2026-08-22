@@ -1,45 +1,88 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Req } from '@nestjs/common';
-import type { Request } from 'express';
+import {
+  Body,
+  Controller,
+  DefaultValuePipe,
+  Get,
+  Param,
+  ParseBoolPipe,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Query,
+  UseInterceptors,
+} from '@nestjs/common';
+import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { Session } from '@thallesp/nestjs-better-auth';
 import type { UserSession } from '@thallesp/nestjs-better-auth';
 import { routes } from '../../routes';
+import { AuditInterceptor } from '../audit/audit.interceptor';
+import { Audit } from '../audit/decorators/audit.decorator';
+import { AppRoles } from '../users/decorators/app-roles.decorator';
+import { UserRole } from '../users/entities/user-profile.entity';
 import { CreateDroneProfileDto } from './dtos/create-drone-profile.dto';
 import { UpdateDroneProfileDto } from './dtos/update-drone-profile.dto';
 import { UpdatePlatformSettingsDto } from './dtos/update-platform-settings.dto';
 import { PlatformConfigService } from './platform-config.service';
 
+@ApiTags('Configuration')
+@AppRoles(UserRole.ADMINISTRATEUR)
+@UseInterceptors(AuditInterceptor)
 @Controller(`${routes.version}${routes.configuration.root}`)
 export class PlatformConfigController {
   constructor(private readonly configService: PlatformConfigService) {}
 
-  @Get('settings')
+  @Get(routes.configuration.settings)
+  @ApiOperation({ summary: 'Seuils de sévérité et paramètres de clustering' })
   getSettings(@Session() session: UserSession) {
     return this.configService.getSettings(session.user.id);
   }
 
-  @Patch('settings')
-  updateSettings(@Session() session: UserSession, @Req() request: Request, @Body() dto: UpdatePlatformSettingsDto) {
-    return this.configService.updateSettings(session.user.id, dto, {
-      userId: session.user.id, userEmail: session.user.email ?? null, ipAddress: request.ip ?? null,
-    });
+  @Patch(routes.configuration.settings)
+  @Audit({
+    action: 'configuration.settings.updated',
+    targetType: 'configuration',
+  })
+  @ApiOperation({ summary: 'Mettre à jour les seuils de sévérité' })
+  updateSettings(
+    @Session() session: UserSession,
+    @Body() dto: UpdatePlatformSettingsDto,
+  ) {
+    return this.configService.updateSettings(session.user.id, dto);
   }
 
-  @Get('drone-profiles')
-  listProfiles(@Session() session: UserSession, @Query('activeOnly') activeOnly?: string) {
-    return this.configService.listDroneProfiles(session.user.id, activeOnly === 'true');
+  @Get(routes.configuration.droneProfiles)
+  @ApiOperation({ summary: 'Lister les profils drone' })
+  @ApiQuery({ name: 'activeOnly', required: false, type: Boolean })
+  listProfiles(
+    @Session() session: UserSession,
+    @Query('activeOnly', new DefaultValuePipe(false), ParseBoolPipe)
+    activeOnly: boolean,
+  ) {
+    return this.configService.listDroneProfiles(session.user.id, activeOnly);
   }
 
-  @Post('drone-profiles')
-  createProfile(@Session() session: UserSession, @Req() request: Request, @Body() dto: CreateDroneProfileDto) {
-    return this.configService.createDroneProfile(session.user.id, dto, {
-      userId: session.user.id, userEmail: session.user.email ?? null, ipAddress: request.ip ?? null,
-    });
+  @Post(routes.configuration.droneProfiles)
+  @Audit({ action: 'drone_profile.created', targetType: 'drone_profile' })
+  @ApiOperation({ summary: 'Créer un profil drone' })
+  createProfile(
+    @Session() session: UserSession,
+    @Body() dto: CreateDroneProfileDto,
+  ) {
+    return this.configService.createDroneProfile(session.user.id, dto);
   }
 
-  @Patch('drone-profiles/:id')
-  updateProfile(@Session() session: UserSession, @Req() request: Request, @Param('id') id: string, @Body() dto: UpdateDroneProfileDto) {
-    return this.configService.updateDroneProfile(session.user.id, id, dto, {
-      userId: session.user.id, userEmail: session.user.email ?? null, ipAddress: request.ip ?? null,
-    });
+  @Patch(routes.configuration.droneProfileById)
+  @Audit({
+    action: 'drone_profile.updated',
+    targetType: 'drone_profile',
+    targetIdParam: 'id',
+  })
+  @ApiOperation({ summary: 'Mettre à jour un profil drone' })
+  updateProfile(
+    @Session() session: UserSession,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateDroneProfileDto,
+  ) {
+    return this.configService.updateDroneProfile(session.user.id, id, dto);
   }
 }

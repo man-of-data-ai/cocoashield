@@ -1,42 +1,41 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { Parcel, ParcelStatus, TerrainVerificationStatus } from './entities/parcel.entity';
 import { CreateParcelDto } from './dtos/create-parcel.dto';
+import {
+  Parcel,
+  ParcelStatus,
+  TerrainVerificationStatus,
+} from './entities/parcel.entity';
 import { ParcelRepository } from './repositories/parcel.repository';
-import { AuditActor, AuditService } from '../audit/audit.service';
 
 @Injectable()
 export class ParcelsService {
-  constructor(
-    private readonly parcelRepository: ParcelRepository,
-    private readonly auditService: AuditService,
-  ) {}
+  constructor(private readonly parcelRepository: ParcelRepository) {}
 
-  async create(ownerId: string, dto: CreateParcelDto, actor?: AuditActor): Promise<Parcel> {
-    const ring = this.closeRing(dto.coordinates);
-
-    const parcel = await this.parcelRepository.create({
+  create(ownerId: string, dto: CreateParcelDto): Promise<Parcel> {
+    return this.parcelRepository.create({
       ownerId,
       name: dto.name,
-      boundary: { type: 'Polygon', coordinates: [ring] },
+      boundary: {
+        type: 'Polygon',
+        coordinates: [this.closeRing(dto.coordinates)],
+      },
       status: ParcelStatus.NOT_ANALYZED,
     });
-    if (actor) {
-      await this.auditService.log({ ...actor, action: 'parcel.created', targetType: 'parcel', targetId: parcel.id, targetLabel: parcel.name, details: { coordinateCount: ring.length } });
-    }
-    return parcel;
   }
 
   findAllForOwner(ownerId: string): Promise<Parcel[]> {
     return this.parcelRepository.findByOwner(ownerId);
   }
 
-  async findOneForOwner(id: string, ownerId: string, actor?: AuditActor): Promise<Parcel> {
+  /**
+   * Charge une parcelle en vérifiant qu'elle appartient bien à l'appelant.
+   * Le propriétaire est porté par la requête : aucun filtrage en mémoire
+   * après chargement, sans quoi une parcelle tierce transiterait déjà.
+   */
+  async findOneForOwner(id: string, ownerId: string): Promise<Parcel> {
     const parcel = await this.parcelRepository.findByIdAndOwner(id, ownerId);
     if (!parcel) {
-      throw new NotFoundException('Parcel not found');
-    }
-    if (actor) {
-      await this.auditService.log({ ...actor, action: 'parcel.consulted', targetType: 'parcel', targetId: parcel.id, targetLabel: parcel.name, details: { status: parcel.status } });
+      throw new NotFoundException('Parcelle introuvable.');
     }
     return parcel;
   }
@@ -45,33 +44,22 @@ export class ParcelsService {
     return this.parcelRepository.updateStatus(id, status);
   }
 
-
   async updateVerification(
     id: string,
     ownerId: string,
     status: TerrainVerificationStatus,
     comment?: string,
-    actor?: AuditActor,
   ): Promise<Parcel> {
     await this.findOneForOwner(id, ownerId);
+
     await this.parcelRepository.updateVerification(id, {
       terrainVerificationStatus: status,
       terrainVerificationComment: comment?.trim() || null,
       terrainVerifiedAt:
         status === TerrainVerificationStatus.PENDING ? null : new Date(),
     });
-    const parcel = await this.findOneForOwner(id, ownerId);
-    if (actor) {
-      await this.auditService.log({
-        ...actor,
-        action: status === TerrainVerificationStatus.VERIFIED ? 'parcel.verified' : status === TerrainVerificationStatus.FALSE_POSITIVE ? 'parcel.false_positive' : 'parcel.verification.reset',
-        targetType: 'parcel',
-        targetId: parcel.id,
-        targetLabel: parcel.name,
-        details: { verificationStatus: status, comment: comment?.trim() || null },
-      });
-    }
-    return parcel;
+
+    return this.findOneForOwner(id, ownerId);
   }
 
   private closeRing(points: [number, number][]): number[][] {

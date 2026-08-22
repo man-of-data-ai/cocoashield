@@ -26,6 +26,7 @@ import {
   buildZoneHistorySnapshot,
   parcelsForComparisonReference,
 } from "@/lib/zone-history";
+import { useSeverityThresholds } from "@/context/SeverityThresholdsContext";
 import { missionService } from "@/services/mission-service";
 import { parcelService } from "@/services/parcel-service";
 import type { Mission, Parcel } from "@/types/parcel";
@@ -42,7 +43,7 @@ const CampaignComparisonMap = dynamic(
         <Spinner label="Chargement de la carte..." />
       </div>
     ),
-  }
+  },
 );
 
 function missionDate(mission: Mission): string {
@@ -83,7 +84,12 @@ export default function ComparaisonPage() {
   const [leftMissionId, setLeftMissionId] = useState("");
   const [rightMissionId, setRightMissionId] = useState("");
   const [viewport, setViewport] = useState<ComparisonViewport | null>(null);
-  const [activeSeverityLevels, setActiveSeverityLevels] = useState<Severity[]>(["faible","modere","eleve","critique"]);
+  const [activeSeverityLevels, setActiveSeverityLevels] = useState<Severity[]>([
+    "faible",
+    "modere",
+    "eleve",
+    "critique",
+  ]);
   const [leftRiskZone, setLeftRiskZone] = useState<RiskZone | null>(null);
   const [rightRiskZone, setRightRiskZone] = useState<RiskZone | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -106,7 +112,7 @@ export default function ComparaisonPage() {
         setError(
           err instanceof ApiError
             ? err.message
-            : "Impossible de charger les données de comparaison."
+            : "Impossible de charger les données de comparaison.",
         );
       })
       .finally(() => {
@@ -119,26 +125,34 @@ export default function ComparaisonPage() {
 
   const leftMission = useMemo(
     () => missions.find((mission) => mission.id === leftMissionId) ?? null,
-    [missions, leftMissionId]
+    [missions, leftMissionId],
   );
+  const { thresholds } = useSeverityThresholds();
+
   const rightMission = useMemo(
     () => missions.find((mission) => mission.id === rightMissionId) ?? null,
-    [missions, rightMissionId]
+    [missions, rightMissionId],
   );
 
   const referenceParcels = useMemo(
     () =>
       parcelsForComparisonReference(parcels, [leftMissionId, rightMissionId]),
-    [parcels, leftMissionId, rightMissionId]
+    [parcels, leftMissionId, rightMissionId],
   );
 
   const leftSnapshot = useMemo(
-    () => (leftMission ? buildZoneHistorySnapshot(parcels, leftMission) : null),
-    [parcels, leftMission]
+    () =>
+      leftMission
+        ? buildZoneHistorySnapshot(parcels, leftMission, thresholds)
+        : null,
+    [parcels, leftMission, thresholds],
   );
   const rightSnapshot = useMemo(
-    () => (rightMission ? buildZoneHistorySnapshot(parcels, rightMission) : null),
-    [parcels, rightMission]
+    () =>
+      rightMission
+        ? buildZoneHistorySnapshot(parcels, rightMission, thresholds)
+        : null,
+    [parcels, rightMission, thresholds],
   );
 
   const rateDeltaPoints =
@@ -152,15 +166,27 @@ export default function ComparaisonPage() {
       : 0;
 
   async function handleExportPdf() {
-    if (!leftMission || !rightMission || !leftSnapshot || !rightSnapshot || leftMissionId === rightMissionId) {
-      setExportError("Sélectionnez deux campagnes différentes contenant des données avant l’export.");
+    if (
+      !leftMission ||
+      !rightMission ||
+      !leftSnapshot ||
+      !rightSnapshot ||
+      leftMissionId === rightMissionId
+    ) {
+      setExportError(
+        "Sélectionnez deux campagnes différentes contenant des données avant l’export.",
+      );
       return;
     }
     setIsExporting(true);
     setExportError(null);
     try {
-      const leftByParcel = new Map(leftSnapshot.parcels.map((snapshot) => [snapshot.parcel.id, snapshot]));
-      const rightByParcel = new Map(rightSnapshot.parcels.map((snapshot) => [snapshot.parcel.id, snapshot]));
+      const leftByParcel = new Map(
+        leftSnapshot.parcels.map((snapshot) => [snapshot.parcel.id, snapshot]),
+      );
+      const rightByParcel = new Map(
+        rightSnapshot.parcels.map((snapshot) => [snapshot.parcel.id, snapshot]),
+      );
       exportComparisonPdf({
         leftName: leftMission.name,
         leftDate: missionDate(leftMission),
@@ -188,7 +214,9 @@ export default function ComparaisonPage() {
       });
     } catch (err) {
       console.error(err);
-      setExportError("Le PDF comparatif n’a pas pu être généré. Réessayez dans quelques instants.");
+      setExportError(
+        "Le PDF comparatif n’a pas pu être généré. Réessayez dans quelques instants.",
+      );
     } finally {
       setIsExporting(false);
     }
@@ -228,7 +256,8 @@ export default function ComparaisonPage() {
             Aucune campagne disponible
           </p>
           <p className="mt-1 text-sm text-slate-500">
-            Créez ou associez des analyses à des missions pour pouvoir les comparer.
+            Créez ou associez des analyses à des missions pour pouvoir les
+            comparer.
           </p>
         </div>
       ) : (
@@ -239,39 +268,87 @@ export default function ComparaisonPage() {
                 <GitCompareArrows className="h-4 w-4" />
               </div>
               <div>
-                <h2 className="font-semibold text-slate-900">Comparer les relevés</h2>
+                <h2 className="font-semibold text-slate-900">
+                  Comparer les relevés
+                </h2>
                 <p className="text-sm text-slate-500">
-                  Sélectionnez deux campagnes. Les deux cartes restent synchronisées sur la même zone géographique.
+                  Sélectionnez deux campagnes. Les deux cartes restent
+                  synchronisées sur la même zone géographique.
                 </p>
               </div>
             </div>
 
-            <div className="mb-4 rounded-2xl bg-slate-50 p-3"><div className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Couches de sévérité</div><SeverityLayerSelector value={activeSeverityLevels} onChange={setActiveSeverityLevels} compact /></div>
+            <div className="mb-4 rounded-2xl bg-slate-50 p-3">
+              <div className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">
+                Couches de sévérité
+              </div>
+              <SeverityLayerSelector
+                value={activeSeverityLevels}
+                onChange={setActiveSeverityLevels}
+                compact
+              />
+            </div>
 
             <div className="grid gap-3 md:grid-cols-2">
               <label className="space-y-1.5">
                 <span className="text-xs font-bold uppercase tracking-wide text-slate-500">
                   Campagne de référence
                 </span>
-                <ModernSelect value={leftMissionId} onChange={(value)=>{setLeftMissionId(value);setViewport(null);setLeftRiskZone(null);setRightRiskZone(null);}} options={missions.filter((mission) => mission.id !== rightMissionId).map((mission) => ({ value: mission.id, label: mission.name, description: missionDate(mission) }))} />
+                <ModernSelect
+                  value={leftMissionId}
+                  onChange={(value) => {
+                    setLeftMissionId(value);
+                    setViewport(null);
+                    setLeftRiskZone(null);
+                    setRightRiskZone(null);
+                  }}
+                  options={missions
+                    .filter((mission) => mission.id !== rightMissionId)
+                    .map((mission) => ({
+                      value: mission.id,
+                      label: mission.name,
+                      description: missionDate(mission),
+                    }))}
+                />
               </label>
 
               <label className="space-y-1.5">
                 <span className="text-xs font-bold uppercase tracking-wide text-slate-500">
                   Campagne comparée
                 </span>
-                <ModernSelect value={rightMissionId} onChange={(value)=>{setRightMissionId(value);setViewport(null);setLeftRiskZone(null);setRightRiskZone(null);}} placeholder="Choisir une seconde campagne" options={missions.filter((mission) => mission.id !== leftMissionId).map((mission) => ({ value: mission.id, label: mission.name, description: missionDate(mission) }))} />
+                <ModernSelect
+                  value={rightMissionId}
+                  onChange={(value) => {
+                    setRightMissionId(value);
+                    setViewport(null);
+                    setLeftRiskZone(null);
+                    setRightRiskZone(null);
+                  }}
+                  placeholder="Choisir une seconde campagne"
+                  options={missions
+                    .filter((mission) => mission.id !== leftMissionId)
+                    .map((mission) => ({
+                      value: mission.id,
+                      label: mission.name,
+                      description: missionDate(mission),
+                    }))}
+                />
               </label>
             </div>
           </section>
 
           {missions.length < 2 && (
             <Alert variant="info">
-              Deux campagnes distinctes sont nécessaires pour établir un comparatif.
+              Deux campagnes distinctes sont nécessaires pour établir un
+              comparatif.
             </Alert>
           )}
 
-          {leftSnapshot && rightSnapshot && leftMission && rightMission && leftMission.id !== rightMission.id ? (
+          {leftSnapshot &&
+          rightSnapshot &&
+          leftMission &&
+          rightMission &&
+          leftMission.id !== rightMission.id ? (
             <div className="space-y-5 rounded-2xl bg-[#F6F8F3] p-0.5">
               <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                 <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -285,7 +362,9 @@ export default function ComparaisonPage() {
                     <span className="text-2xl font-semibold text-slate-900">
                       {(rightSnapshot.infectionRate * 100).toFixed(1)} %
                     </span>
-                    <span className="pb-1 text-xs text-slate-400">campagne comparée</span>
+                    <span className="pb-1 text-xs text-slate-400">
+                      campagne comparée
+                    </span>
                   </div>
                 </div>
 
@@ -296,10 +375,14 @@ export default function ComparaisonPage() {
                     </span>
                     <VariationIcon value={rateDeltaPoints} />
                   </div>
-                  <div className={`mt-2 text-2xl font-semibold ${rateDeltaPoints > 0 ? "text-red-600" : rateDeltaPoints < 0 ? "text-emerald-600" : "text-slate-900"}`}>
+                  <div
+                    className={`mt-2 text-2xl font-semibold ${rateDeltaPoints > 0 ? "text-red-600" : rateDeltaPoints < 0 ? "text-emerald-600" : "text-slate-900"}`}
+                  >
                     {formatSigned(rateDeltaPoints)} pts
                   </div>
-                  <p className="mt-1 text-xs text-slate-500">points de pourcentage</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    points de pourcentage
+                  </p>
                 </div>
 
                 <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -312,7 +395,9 @@ export default function ComparaisonPage() {
                   <div className="mt-2 text-2xl font-semibold text-slate-900">
                     {formatHa(rightSnapshot.infectedAreaSquareMeters)}
                   </div>
-                  <p className="mt-1 text-xs text-slate-500">estimation pondérée par le taux observé</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    estimation pondérée par le taux observé
+                  </p>
                 </div>
 
                 <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -322,17 +407,29 @@ export default function ComparaisonPage() {
                     </span>
                     <VariationIcon value={areaDeltaSquareMeters} />
                   </div>
-                  <div className={`mt-2 text-2xl font-semibold ${areaDeltaSquareMeters > 0 ? "text-red-600" : areaDeltaSquareMeters < 0 ? "text-emerald-600" : "text-slate-900"}`}>
+                  <div
+                    className={`mt-2 text-2xl font-semibold ${areaDeltaSquareMeters > 0 ? "text-red-600" : areaDeltaSquareMeters < 0 ? "text-emerald-600" : "text-slate-900"}`}
+                  >
                     {formatSigned(areaDeltaSquareMeters / 10_000, 2)} ha
                   </div>
-                  <p className="mt-1 text-xs text-slate-500">entre les deux campagnes</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    entre les deux campagnes
+                  </p>
                 </div>
               </section>
 
               <section className="grid gap-4 xl:grid-cols-2">
                 {[
-                  { mission: leftMission, snapshot: leftSnapshot, side: "left" as const },
-                  { mission: rightMission, snapshot: rightSnapshot, side: "right" as const },
+                  {
+                    mission: leftMission,
+                    snapshot: leftSnapshot,
+                    side: "left" as const,
+                  },
+                  {
+                    mission: rightMission,
+                    snapshot: rightSnapshot,
+                    side: "right" as const,
+                  },
                 ].map(({ mission, snapshot, side }) => (
                   <article
                     key={side}
@@ -348,10 +445,14 @@ export default function ComparaisonPage() {
                           <h3 className="mt-1 text-lg font-semibold text-slate-900">
                             {mission.name}
                           </h3>
-                          <p className="text-sm text-slate-500">{missionDate(mission)}</p>
+                          <p className="text-sm text-slate-500">
+                            {missionDate(mission)}
+                          </p>
                         </div>
                         <div className="rounded-xl bg-[#244B32]/5 px-3 py-2 text-right">
-                          <div className="text-xs text-slate-500">Infection</div>
+                          <div className="text-xs text-slate-500">
+                            Infection
+                          </div>
                           <div className="font-semibold text-[#244B32]">
                             {(snapshot.infectionRate * 100).toFixed(1)} %
                           </div>
@@ -366,27 +467,47 @@ export default function ComparaisonPage() {
                         viewport={viewport}
                         onViewportChange={setViewport}
                         activeSeverityLevels={activeSeverityLevels}
-                        selectedRiskZone={side === "left" ? leftRiskZone : rightRiskZone}
-                        onSelectRiskZone={side === "left" ? setLeftRiskZone : setRightRiskZone}
+                        selectedRiskZone={
+                          side === "left" ? leftRiskZone : rightRiskZone
+                        }
+                        onSelectRiskZone={
+                          side === "left" ? setLeftRiskZone : setRightRiskZone
+                        }
                       />
                     </div>
 
                     <footer className="grid grid-cols-2 gap-px border-t border-slate-200 bg-slate-200 sm:grid-cols-4">
                       <div className="bg-white p-3">
-                        <div className="text-[11px] uppercase tracking-wide text-slate-400">Zones</div>
-                        <div className="mt-0.5 font-semibold text-slate-800">{snapshot.parcels.length}</div>
+                        <div className="text-[11px] uppercase tracking-wide text-slate-400">
+                          Zones
+                        </div>
+                        <div className="mt-0.5 font-semibold text-slate-800">
+                          {snapshot.parcels.length}
+                        </div>
                       </div>
                       <div className="bg-white p-3">
-                        <div className="text-[11px] uppercase tracking-wide text-slate-400">Images</div>
-                        <div className="mt-0.5 font-semibold text-slate-800">{snapshot.processedImages}</div>
+                        <div className="text-[11px] uppercase tracking-wide text-slate-400">
+                          Images
+                        </div>
+                        <div className="mt-0.5 font-semibold text-slate-800">
+                          {snapshot.processedImages}
+                        </div>
                       </div>
                       <div className="bg-white p-3">
-                        <div className="text-[11px] uppercase tracking-wide text-slate-400">Infectées</div>
-                        <div className="mt-0.5 font-semibold text-slate-800">{snapshot.infectedImages}</div>
+                        <div className="text-[11px] uppercase tracking-wide text-slate-400">
+                          Infectées
+                        </div>
+                        <div className="mt-0.5 font-semibold text-slate-800">
+                          {snapshot.infectedImages}
+                        </div>
                       </div>
                       <div className="bg-white p-3">
-                        <div className="text-[11px] uppercase tracking-wide text-slate-400">Surface</div>
-                        <div className="mt-0.5 font-semibold text-slate-800">{formatHa(snapshot.infectedAreaSquareMeters)}</div>
+                        <div className="text-[11px] uppercase tracking-wide text-slate-400">
+                          Surface
+                        </div>
+                        <div className="mt-0.5 font-semibold text-slate-800">
+                          {formatHa(snapshot.infectedAreaSquareMeters)}
+                        </div>
                       </div>
                     </footer>
                   </article>
@@ -401,16 +522,23 @@ export default function ComparaisonPage() {
                       Lecture du comparatif
                     </div>
                     <p className="mt-1 text-sm text-slate-500">
-                      Les deux vues utilisent la même emprise et se synchronisent lors du déplacement ou du zoom. Les contours correspondent aux parcelles présentes dans au moins une des deux campagnes ; la heatmap et les points proviennent uniquement des relevés de la campagne affichée.
+                      Les deux vues utilisent la même emprise et se
+                      synchronisent lors du déplacement ou du zoom. Les contours
+                      correspondent aux parcelles présentes dans au moins une
+                      des deux campagnes ; la heatmap et les points proviennent
+                      uniquement des relevés de la campagne affichée.
                     </p>
                   </div>
                   <div className="flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600">
                     <ImageIcon className="h-4 w-4" />
-                    {referenceParcels.length} parcelle{referenceParcels.length > 1 ? "s" : ""} de référence
+                    {referenceParcels.length} parcelle
+                    {referenceParcels.length > 1 ? "s" : ""} de référence
                   </div>
                 </div>
                 <div className="mt-3 rounded-xl border border-[#87B940]/30 bg-[#87B940]/10 px-3 py-2 text-xs font-medium text-[#556D34]">
-                  non-garantie diagnostique — Les taux et surfaces sont des indicateurs d&apos;aide à la surveillance et doivent être confirmés par une vérification terrain.
+                  non-garantie diagnostique — Les taux et surfaces sont des
+                  indicateurs d&apos;aide à la surveillance et doivent être
+                  confirmés par une vérification terrain.
                 </div>
               </section>
             </div>

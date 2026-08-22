@@ -1,12 +1,25 @@
 import { apiRequest } from "@/lib/api-client";
-import type { DroneProfile, DroneProfileInput, PlatformSettings } from "@/types/configuration";
+import type {
+  DroneProfile,
+  DroneProfileInput,
+  PlatformSettings,
+} from "@/types/configuration";
 
 export const configurationService = {
   getSettings(): Promise<PlatformSettings> {
     return apiRequest<PlatformSettings>("/v1/configuration/settings");
   },
 
-  updateSettings(payload: Pick<PlatformSettings, "severityModerate" | "severityHigh" | "severityCritical" | "clusteringRadiusM" | "minImagesPerZone">): Promise<PlatformSettings> {
+  updateSettings(
+    payload: Pick<
+      PlatformSettings,
+      | "severityModerate"
+      | "severityHigh"
+      | "severityCritical"
+      | "clusteringRadiusM"
+      | "minImagesPerZone"
+    >,
+  ): Promise<PlatformSettings> {
     return apiRequest<PlatformSettings>("/v1/configuration/settings", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -15,7 +28,9 @@ export const configurationService = {
   },
 
   listDroneProfiles(activeOnly = false): Promise<DroneProfile[]> {
-    return apiRequest<DroneProfile[]>(`/v1/configuration/drone-profiles${activeOnly ? "?activeOnly=true" : ""}`);
+    return apiRequest<DroneProfile[]>(
+      `/v1/configuration/drone-profiles${activeOnly ? "?activeOnly=true" : ""}`,
+    );
   },
 
   createDroneProfile(payload: DroneProfileInput): Promise<DroneProfile> {
@@ -26,7 +41,10 @@ export const configurationService = {
     });
   },
 
-  updateDroneProfile(id: string, payload: Partial<DroneProfileInput>): Promise<DroneProfile> {
+  updateDroneProfile(
+    id: string,
+    payload: Partial<DroneProfileInput>,
+  ): Promise<DroneProfile> {
     return apiRequest<DroneProfile>(`/v1/configuration/drone-profiles/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },

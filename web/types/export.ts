@@ -32,6 +32,16 @@ export type AuditFilters = {
   dateFrom?: string;
   dateTo?: string;
   target?: string;
+  limit?: number;
+  offset?: number;
+};
+
+/** Réponse paginée de `GET /v1/audit`. */
+export type AuditPage = {
+  items: AuditLog[];
+  total: number;
+  limit: number;
+  offset: number;
 };
 
 export type AuditFacets = { users: string[]; actions: string[] };

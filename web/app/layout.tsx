@@ -3,6 +3,7 @@ import "./globals.css";
 import "leaflet/dist/leaflet.css";
 
 import { AuthProvider } from "@/context/AuthContext";
+import { SeverityThresholdsProvider } from "@/context/SeverityThresholdsContext";
 
 // Application entièrement derrière authentification : aucun intérêt à
 // pré-rendre statiquement les pages au build (et plusieurs écrans lisent
@@ -23,7 +24,9 @@ export default function RootLayout({
   return (
     <html lang="fr" className="h-full antialiased">
       <body className="min-h-full flex flex-col">
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <SeverityThresholdsProvider>{children}</SeverityThresholdsProvider>
+        </AuthProvider>
       </body>
     </html>
   );

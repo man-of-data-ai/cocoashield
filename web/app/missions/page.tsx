@@ -2,8 +2,15 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { CalendarDays, Route, Search, SlidersHorizontal, Eye, Download } from "lucide-react";
+import { Suspense, useEffect, useMemo, useState, type FormEvent } from "react";
+import {
+  CalendarDays,
+  Route,
+  Search,
+  SlidersHorizontal,
+  Eye,
+  Download,
+} from "lucide-react";
 
 import AppShell from "@/components/layout/AppShell";
 import ModernSelect from "@/components/ui/ModernSelect";
@@ -14,11 +21,7 @@ import { ApiError } from "@/lib/api-client";
 import { computeParcelMetrics } from "@/lib/geo";
 import { missionService } from "@/services/mission-service";
 import { parcelService } from "@/services/parcel-service";
-import type {
-  Analysis,
-  Mission,
-  Parcel,
-} from "@/types/parcel";
+import type { Analysis, Mission, Parcel } from "@/types/parcel";
 
 type MissionProcessingStatus = "processing" | "processed" | "error";
 type DroneFilter = string;
@@ -55,7 +58,7 @@ function parseMissionDate(mission: Mission): Date | null {
 function missionStatus(analyses: Analysis[]): MissionProcessingStatus {
   if (
     analyses.some((analysis) =>
-      analysis.images?.some((image) => image.status === "failed")
+      analysis.images?.some((image) => image.status === "failed"),
     )
   ) {
     return "error";
@@ -66,7 +69,8 @@ function missionStatus(analyses: Analysis[]): MissionProcessingStatus {
     analyses.every(
       (analysis) =>
         analysis.status === "completed" &&
-        (analysis.images?.every((image) => image.status === "processed") ?? true)
+        (analysis.images?.every((image) => image.status === "processed") ??
+          true),
     )
   ) {
     return "processed";
@@ -91,17 +95,24 @@ function formatSurface(squareMeters: number): string {
   })} ha`;
 }
 
-function buildMissionRows(missions: Mission[], parcels: Parcel[]): MissionRow[] {
+function buildMissionRows(
+  missions: Mission[],
+  parcels: Parcel[],
+): MissionRow[] {
   return missions.map((mission) => {
     const related = parcels.flatMap((parcel) =>
       (parcel.analyses ?? [])
         .filter((analysis) => analysis.missionId === mission.id)
-        .map((analysis) => ({ parcel, analysis }))
+        .map((analysis) => ({ parcel, analysis })),
     );
 
     const analyses = related.map(({ analysis }) => analysis);
     const vectorSources = Array.from(
-      new Set(analyses.map((analysis) => analysis.profileId).filter((value): value is string => Boolean(value)))
+      new Set(
+        analyses
+          .map((analysis) => analysis.profileId)
+          .filter((value): value is string => Boolean(value)),
+      ),
     );
     const parcelIds = new Set(related.map(({ parcel }) => parcel.id));
     const surfaceSquareMeters = parcels
@@ -121,7 +132,7 @@ function buildMissionRows(missions: Mission[], parcels: Parcel[]): MissionRow[] 
       vectorSources,
       imageCount: analyses.reduce(
         (total, analysis) => total + (analysis.images?.length ?? 0),
-        0
+        0,
       ),
       parcelCount: parcelIds.size,
       surfaceSquareMeters,
@@ -129,7 +140,7 @@ function buildMissionRows(missions: Mission[], parcels: Parcel[]): MissionRow[] 
   });
 }
 
-export default function MissionsPage() {
+function MissionsPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const requestedMissionId = searchParams.get("mission");
@@ -139,9 +150,9 @@ export default function MissionsPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | MissionProcessingStatus>(
-    "all"
-  );
+  const [statusFilter, setStatusFilter] = useState<
+    "all" | MissionProcessingStatus
+  >("all");
   const [droneFilter, setDroneFilter] = useState<DroneFilter>("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -152,7 +163,8 @@ export default function MissionsPage() {
   const [notes, setNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-  const [selectedMissionRow, setSelectedMissionRow] = useState<MissionRow | null>(null);
+  const [selectedMissionRow, setSelectedMissionRow] =
+    useState<MissionRow | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -168,7 +180,7 @@ export default function MissionsPage() {
         setError(
           err instanceof ApiError
             ? err.message
-            : "Impossible de charger les missions."
+            : "Impossible de charger les missions.",
         );
       })
       .finally(() => {
@@ -180,23 +192,40 @@ export default function MissionsPage() {
     };
   }, []);
 
-  const rows = useMemo(() => buildMissionRows(missions, parcels), [missions, parcels]);
+  const rows = useMemo(
+    () => buildMissionRows(missions, parcels),
+    [missions, parcels],
+  );
 
-  const requestedMissionRow = useMemo(() => requestedMissionId ? rows.find((item) => item.mission.id === requestedMissionId) ?? null : null, [requestedMissionId, rows]);
+  const requestedMissionRow = useMemo(
+    () =>
+      requestedMissionId
+        ? (rows.find((item) => item.mission.id === requestedMissionId) ?? null)
+        : null,
+    [requestedMissionId, rows],
+  );
   const activeMissionRow = selectedMissionRow ?? requestedMissionRow;
 
   const selectedMissionLinks = useMemo(() => {
     if (!activeMissionRow) return [];
-    return parcels.flatMap((parcel) => (parcel.analyses ?? [])
-      .filter((analysis) => analysis.missionId === activeMissionRow.mission.id)
-      .map((analysis) => ({ parcel, analysis }))
-    ).sort((a,b)=>new Date(b.analysis.createdAt).getTime()-new Date(a.analysis.createdAt).getTime());
+    return parcels
+      .flatMap((parcel) =>
+        (parcel.analyses ?? [])
+          .filter(
+            (analysis) => analysis.missionId === activeMissionRow.mission.id,
+          )
+          .map((analysis) => ({ parcel, analysis })),
+      )
+      .sort(
+        (a, b) =>
+          new Date(b.analysis.createdAt).getTime() -
+          new Date(a.analysis.createdAt).getTime(),
+      );
   }, [activeMissionRow, parcels]);
 
   const availableVectors = useMemo(
-    () =>
-      Array.from(new Set(rows.flatMap((row) => row.vectorSources))).sort(),
-    [rows]
+    () => Array.from(new Set(rows.flatMap((row) => row.vectorSources))).sort(),
+    [rows],
   );
 
   const filteredRows = useMemo(() => {
@@ -212,10 +241,7 @@ export default function MissionsPage() {
         return false;
       }
       if (statusFilter !== "all" && row.status !== statusFilter) return false;
-      if (
-        droneFilter !== "all" &&
-        !row.vectorSources.includes(droneFilter)
-      ) {
+      if (droneFilter !== "all" && !row.vectorSources.includes(droneFilter)) {
         return false;
       }
       if (from && (!row.date || row.date < from)) return false;
@@ -266,7 +292,9 @@ export default function MissionsPage() {
       setIsDialogOpen(false);
     } catch (err) {
       setFormError(
-        err instanceof ApiError ? err.message : "Impossible de créer la mission."
+        err instanceof ApiError
+          ? err.message
+          : "Impossible de créer la mission.",
       );
     } finally {
       setIsSubmitting(false);
@@ -282,7 +310,9 @@ export default function MissionsPage() {
       nombreParcelles: row.parcelCount,
       surfaceHectares: Number((row.surfaceSquareMeters / 10_000).toFixed(2)),
     };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: "application/json;charset=utf-8",
+    });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
@@ -327,7 +357,9 @@ export default function MissionsPage() {
                   Tableau des campagnes avec statut
                 </div>
                 <p className="mt-1 text-sm text-slate-500">
-                  {filteredRows.length} mission{filteredRows.length > 1 ? "s" : ""} affichée{filteredRows.length > 1 ? "s" : ""} sur {rows.length}.
+                  {filteredRows.length} mission
+                  {filteredRows.length > 1 ? "s" : ""} affichée
+                  {filteredRows.length > 1 ? "s" : ""} sur {rows.length}.
                 </p>
               </div>
 
@@ -349,14 +381,35 @@ export default function MissionsPage() {
                 <span className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
                   <SlidersHorizontal className="h-3.5 w-3.5" /> Statut
                 </span>
-                <ModernSelect value={statusFilter} onChange={(value) => setStatusFilter(value as "all" | MissionProcessingStatus)} options={[{ value: "all", label: "Tous statuts" }, { value: "processing", label: "En traitement" }, { value: "processed", label: "Traitée" }, { value: "error", label: "Erreur" }]} />
+                <ModernSelect
+                  value={statusFilter}
+                  onChange={(value) =>
+                    setStatusFilter(value as "all" | MissionProcessingStatus)
+                  }
+                  options={[
+                    { value: "all", label: "Tous statuts" },
+                    { value: "processing", label: "En traitement" },
+                    { value: "processed", label: "Traitée" },
+                    { value: "error", label: "Erreur" },
+                  ]}
+                />
               </label>
 
               <label className="block">
                 <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
                   Drone
                 </span>
-                <ModernSelect value={droneFilter} onChange={(value) => setDroneFilter(value as DroneFilter)} options={[{ value: "all", label: "Tous les drones" }, ...availableVectors.map((drone) => ({ value: drone, label: drone }))]} />
+                <ModernSelect
+                  value={droneFilter}
+                  onChange={(value) => setDroneFilter(value as DroneFilter)}
+                  options={[
+                    { value: "all", label: "Tous les drones" },
+                    ...availableVectors.map((drone) => ({
+                      value: drone,
+                      label: drone,
+                    })),
+                  ]}
+                />
               </label>
 
               <label className="block">
@@ -401,15 +454,20 @@ export default function MissionsPage() {
           {rows.length === 0 ? (
             <div className="p-10 text-center">
               <Route className="mx-auto mb-3 h-8 w-8 text-slate-300" />
-              <p className="text-sm text-slate-600">Aucune mission pour le moment.</p>
+              <p className="text-sm text-slate-600">
+                Aucune mission pour le moment.
+              </p>
               <p className="mt-1 text-xs text-slate-400">
-                Les missions se créent aussi automatiquement lors de l’ajout d’une analyse.
+                Les missions se créent aussi automatiquement lors de l’ajout
+                d’une analyse.
               </p>
             </div>
           ) : filteredRows.length === 0 ? (
             <div className="p-10 text-center">
               <Search className="mx-auto mb-3 h-8 w-8 text-slate-300" />
-              <p className="text-sm font-medium text-slate-700">Aucun résultat</p>
+              <p className="text-sm font-medium text-slate-700">
+                Aucun résultat
+              </p>
               <p className="mt-1 text-xs text-slate-400">
                 Modifiez la recherche ou les filtres combinés.
               </p>
@@ -482,8 +540,22 @@ export default function MissionsPage() {
                       </td>
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-2">
-                          <button type="button" onClick={() => setSelectedMissionRow(row)} className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:border-[#AFC5A3] hover:text-[#244B32]" aria-label={`Consulter ${row.mission.name}`}><Eye className="h-4 w-4" /></button>
-                          <button type="button" onClick={() => downloadMission(row)} className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#244B32] text-white transition hover:bg-[#356A46]" aria-label={`Télécharger ${row.mission.name}`}><Download className="h-4 w-4" /></button>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedMissionRow(row)}
+                            className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:border-[#AFC5A3] hover:text-[#244B32]"
+                            aria-label={`Consulter ${row.mission.name}`}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => downloadMission(row)}
+                            className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#244B32] text-white transition hover:bg-[#356A46]"
+                            aria-label={`Télécharger ${row.mission.name}`}
+                          >
+                            <Download className="h-4 w-4" />
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -498,7 +570,9 @@ export default function MissionsPage() {
       {isDialogOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
-            <h2 className="text-lg font-semibold text-slate-900">Nouvelle mission</h2>
+            <h2 className="text-lg font-semibold text-slate-900">
+              Nouvelle mission
+            </h2>
 
             <form onSubmit={handleSubmit} className="mt-4 space-y-3">
               <div>
@@ -564,19 +638,131 @@ export default function MissionsPage() {
         </div>
       )}
 
-      <Dialog open={activeMissionRow !== null} onClose={() => { setSelectedMissionRow(null); if (requestedMissionId) router.replace("/missions"); }} title="Détail de la mission">
-        {activeMissionRow && <div className="space-y-4">
-          <div className="rounded-2xl bg-[#F7F9F5] p-4"><h3 className="font-bold text-slate-900">{activeMissionRow.mission.name}</h3><p className="mt-1 text-xs text-slate-500">{formatDate(activeMissionRow.date)}</p>{activeMissionRow.mission.notes && <p className="mt-3 text-sm leading-6 text-slate-600">{activeMissionRow.mission.notes}</p>}</div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <div className="rounded-2xl border border-slate-200 p-3"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Images</p><p className="mt-1 font-bold text-slate-800">{activeMissionRow.imageCount}</p></div>
-            <div className="rounded-2xl border border-slate-200 p-3"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Parcelles</p><p className="mt-1 font-bold text-slate-800">{activeMissionRow.parcelCount}</p></div>
-            <div className="rounded-2xl border border-slate-200 p-3"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Surface</p><p className="mt-1 font-bold text-slate-800">{activeMissionRow.surfaceSquareMeters > 0 ? formatSurface(activeMissionRow.surfaceSquareMeters) : "—"}</p></div>
-            <div className="rounded-2xl border border-slate-200 p-3"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Statut</p><p className="mt-1 font-bold text-slate-800">{STATUS_LABELS[activeMissionRow.status]}</p></div>
+      <Dialog
+        open={activeMissionRow !== null}
+        onClose={() => {
+          setSelectedMissionRow(null);
+          if (requestedMissionId) router.replace("/missions");
+        }}
+        title="Détail de la mission"
+      >
+        {activeMissionRow && (
+          <div className="space-y-4">
+            <div className="rounded-2xl bg-[#F7F9F5] p-4">
+              <h3 className="font-bold text-slate-900">
+                {activeMissionRow.mission.name}
+              </h3>
+              <p className="mt-1 text-xs text-slate-500">
+                {formatDate(activeMissionRow.date)}
+              </p>
+              {activeMissionRow.mission.notes && (
+                <p className="mt-3 text-sm leading-6 text-slate-600">
+                  {activeMissionRow.mission.notes}
+                </p>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div className="rounded-2xl border border-slate-200 p-3">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  Images
+                </p>
+                <p className="mt-1 font-bold text-slate-800">
+                  {activeMissionRow.imageCount}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 p-3">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  Parcelles
+                </p>
+                <p className="mt-1 font-bold text-slate-800">
+                  {activeMissionRow.parcelCount}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 p-3">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  Surface
+                </p>
+                <p className="mt-1 font-bold text-slate-800">
+                  {activeMissionRow.surfaceSquareMeters > 0
+                    ? formatSurface(activeMissionRow.surfaceSquareMeters)
+                    : "—"}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 p-3">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  Statut
+                </p>
+                <p className="mt-1 font-bold text-slate-800">
+                  {STATUS_LABELS[activeMissionRow.status]}
+                </p>
+              </div>
+            </div>
+            <div>
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                Parcelles et analyses associées
+              </h4>
+              {selectedMissionLinks.length === 0 ? (
+                <p className="mt-2 rounded-2xl bg-slate-50 p-3 text-xs text-slate-500">
+                  Cette mission n’a pas encore d’analyse associée.
+                </p>
+              ) : (
+                <div className="mt-2 space-y-2">
+                  {selectedMissionLinks.map(({ parcel, analysis }) => (
+                    <div
+                      key={analysis.id}
+                      className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 p-3"
+                    >
+                      <div className="min-w-0">
+                        <Link
+                          href={`/parcels/${parcel.id}`}
+                          className="truncate text-xs font-bold text-slate-800 hover:text-[#244B32]"
+                        >
+                          {parcel.name}
+                        </Link>
+                        <p className="mt-1 text-[11px] text-slate-400">
+                          Analyse du{" "}
+                          {new Date(analysis.createdAt).toLocaleDateString(
+                            "fr-FR",
+                          )}{" "}
+                          · {analysis.images.length} image
+                          {analysis.images.length > 1 ? "s" : ""}
+                        </p>
+                      </div>
+                      <Link
+                        href={`/parcels/${parcel.id}/analyses/${analysis.id}?from=missions`}
+                        className="shrink-0 rounded-xl border border-[#D9E5D3] px-3 py-2 text-[11px] font-bold text-[#31583B] hover:bg-[#F6FAF3]"
+                      >
+                        Voir l’analyse
+                      </Link>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => downloadMission(activeMissionRow)}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#244B32] px-4 py-2.5 text-sm font-bold text-white"
+            >
+              <Download className="h-4 w-4" />
+              Télécharger la mission
+            </button>
           </div>
-          <div><h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Parcelles et analyses associées</h4>{selectedMissionLinks.length === 0 ? <p className="mt-2 rounded-2xl bg-slate-50 p-3 text-xs text-slate-500">Cette mission n’a pas encore d’analyse associée.</p> : <div className="mt-2 space-y-2">{selectedMissionLinks.map(({parcel,analysis})=><div key={analysis.id} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 p-3"><div className="min-w-0"><Link href={`/parcels/${parcel.id}`} className="truncate text-xs font-bold text-slate-800 hover:text-[#244B32]">{parcel.name}</Link><p className="mt-1 text-[11px] text-slate-400">Analyse du {new Date(analysis.createdAt).toLocaleDateString("fr-FR")} · {analysis.images.length} image{analysis.images.length>1?"s":""}</p></div><Link href={`/parcels/${parcel.id}/analyses/${analysis.id}?from=missions`} className="shrink-0 rounded-xl border border-[#D9E5D3] px-3 py-2 text-[11px] font-bold text-[#31583B] hover:bg-[#F6FAF3]">Voir l’analyse</Link></div>)}</div>}</div>
-          <button type="button" onClick={() => downloadMission(activeMissionRow)} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#244B32] px-4 py-2.5 text-sm font-bold text-white"><Download className="h-4 w-4"/>Télécharger la mission</button>
-        </div>}
+        )}
       </Dialog>
     </AppShell>
+  );
+}
+
+/**
+ * `useSearchParams()` bascule l'arbre en rendu client. Sans cette frontière
+ * `Suspense`, le prérendu de la page échoue au build
+ * (`missing-suspense-with-csr-bailout`).
+ */
+export default function MissionsPage() {
+  return (
+    <Suspense fallback={null}>
+      <MissionsPageContent />
+    </Suspense>
   );
 }

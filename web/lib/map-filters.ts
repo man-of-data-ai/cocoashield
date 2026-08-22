@@ -1,4 +1,3 @@
-
 import type {
   Analysis,
   AnalysisImage,
@@ -8,6 +7,7 @@ import type {
 } from "@/types/parcel";
 import {
   computeSeverityFromImages,
+  type SeverityThresholds,
   type SeverityLevel,
 } from "@/lib/severity";
 
@@ -73,7 +73,8 @@ export function collectImageEntries(parcels: Parcel[]): ImageEntry[] {
 }
 
 function periodStartDate(period: PeriodPreset, now: Date): Date | null {
-  const days = period === "7d" ? 7 : period === "30d" ? 30 : period === "90d" ? 90 : null;
+  const days =
+    period === "7d" ? 7 : period === "30d" ? 30 : period === "90d" ? 90 : null;
   if (days === null) return null;
   const start = new Date(now);
   start.setDate(start.getDate() - days);
@@ -82,11 +83,13 @@ function periodStartDate(period: PeriodPreset, now: Date): Date | null {
 
 export function applyDataFilters(
   entries: ImageEntry[],
-  filters: MapFiltersState
+  filters: MapFiltersState,
 ): ImageEntry[] {
   const now = new Date();
   const presetStart = periodStartDate(filters.period, now);
-  const customStart = filters.customStart ? new Date(filters.customStart) : null;
+  const customStart = filters.customStart
+    ? new Date(filters.customStart)
+    : null;
   const customEnd = filters.customEnd ? new Date(filters.customEnd) : null;
 
   const missionFilterActive = filters.missionIds.length > 0;
@@ -105,11 +108,18 @@ export function applyDataFilters(
     ) {
       return false;
     }
-    if (droneFilterActive && (!analysis.profileId || !filters.droneProfileIds.includes(analysis.profileId))) {
+    if (
+      droneFilterActive &&
+      (!analysis.profileId ||
+        !filters.droneProfileIds.includes(analysis.profileId))
+    ) {
       return false;
     }
     if (missionFilterActive) {
-      if (!analysis.missionId || !filters.missionIds.includes(analysis.missionId)) {
+      if (
+        !analysis.missionId ||
+        !filters.missionIds.includes(analysis.missionId)
+      ) {
         return false;
       }
     }
@@ -135,7 +145,10 @@ export type ParcelAggregate = {
   infectedImages: number;
 };
 
-export function aggregateByParcel(entries: ImageEntry[]): ParcelAggregate[] {
+export function aggregateByParcel(
+  entries: ImageEntry[],
+  thresholds: SeverityThresholds,
+): ParcelAggregate[] {
   const byParcel = new Map<string, ImageEntry[]>();
   for (const entry of entries) {
     const list = byParcel.get(entry.parcel.id) ?? [];
@@ -147,7 +160,8 @@ export function aggregateByParcel(entries: ImageEntry[]): ParcelAggregate[] {
   for (const [, parcelEntries] of byParcel) {
     const parcel = parcelEntries[0].parcel;
     const severity = computeSeverityFromImages(
-      parcelEntries.map((entry) => entry.image)
+      parcelEntries.map((entry) => entry.image),
+      thresholds,
     );
     aggregates.push({
       parcel,
@@ -163,14 +177,16 @@ export function aggregateByParcel(entries: ImageEntry[]): ParcelAggregate[] {
 
 export function applySeverityAndSearchFilters(
   aggregates: ParcelAggregate[],
-  filters: Pick<MapFiltersState, "activeLevels" | "search" | "parcelIds">
+  filters: Pick<MapFiltersState, "activeLevels" | "search" | "parcelIds">,
 ): ParcelAggregate[] {
   const query = filters.search.trim().toLowerCase();
   return aggregates
-    .filter((aggregate) =>
-      filters.parcelIds.length === 0 || filters.parcelIds.includes(aggregate.parcel.id)
+    .filter(
+      (aggregate) =>
+        filters.parcelIds.length === 0 ||
+        filters.parcelIds.includes(aggregate.parcel.id),
     )
-        .filter((aggregate) =>
-      query ? aggregate.parcel.name.toLowerCase().includes(query) : true
+    .filter((aggregate) =>
+      query ? aggregate.parcel.name.toLowerCase().includes(query) : true,
     );
 }

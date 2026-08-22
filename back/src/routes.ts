@@ -15,6 +15,9 @@ const betterAuthBasePath = `${v1}/auth`;
 const users = {
   root: '/users',
   register: '/register',
+  meProfile: '/me/profile',
+  byId: '/:id',
+  profileById: '/:id/profile',
 };
 
 const parcels = {
@@ -41,9 +44,15 @@ const exportsRoutes = {
 
 const audit = {
   root: '/audit',
+  facets: '/facets',
 };
 
-const configuration = { root: '/configuration' };
+const configuration = {
+  root: '/configuration',
+  settings: '/settings',
+  droneProfiles: '/drone-profiles',
+  droneProfileById: '/drone-profiles/:id',
+};
 
 const missions = {
   root: '/missions',

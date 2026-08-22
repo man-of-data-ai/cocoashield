@@ -18,10 +18,15 @@ export default function Home() {
       router.replace("/login");
       return;
     }
-    userService.me()
+    userService
+      .me()
       .then((profile) => router.replace(defaultPathForRole(profile.role)))
       .catch(() => router.replace("/login"));
   }, [isInitializing, user, router]);
 
-  return <main className="flex min-h-screen items-center justify-center bg-[#F6F8F3]"><Spinner label="Ouverture de votre espace..." /></main>;
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-[#F6F8F3]">
+      <Spinner label="Ouverture de votre espace..." />
+    </main>
+  );
 }

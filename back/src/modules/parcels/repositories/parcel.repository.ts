@@ -14,10 +14,17 @@ export class ParcelRepository {
     return this.repository.save(this.repository.create(data));
   }
 
+  /**
+   * Liste des parcelles avec leurs analyses, sans les images.
+   *
+   * Les images ne sont pas hydratées ici : la sévérité et le taux
+   * d'infection sont déjà calculés et stockés sur l'analyse, la liste n'a
+   * donc pas besoin de charger chaque ligne d'image.
+   */
   findByOwner(ownerId: string): Promise<Parcel[]> {
     return this.repository.find({
       where: { ownerId },
-      relations: { analyses: { images: true, mission: true } },
+      relations: { analyses: { mission: true } },
       order: {
         createdAt: 'DESC',
         analyses: { createdAt: 'DESC' },
@@ -36,7 +43,6 @@ export class ParcelRepository {
   async updateStatus(id: string, status: Parcel['status']): Promise<void> {
     await this.repository.update(id, { status });
   }
-
 
   async updateVerification(
     id: string,

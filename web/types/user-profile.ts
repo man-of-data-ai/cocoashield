@@ -12,4 +12,7 @@ export type AppUser = {
   createdAt?: string;
 };
 
-export type CurrentUserProfile = Pick<AppUser, "role" | "cooperative" | "status">;
+export type CurrentUserProfile = Pick<
+  AppUser,
+  "role" | "cooperative" | "status"
+>;
