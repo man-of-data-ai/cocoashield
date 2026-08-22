@@ -1,10 +1,27 @@
-import { redirect } from "next/navigation";
+"use client";
 
-/**
- * Page racine : aiguillage pur, sans rendu visible. Redirige vers /map ;
- * le proxy (proxy.ts) se charge de rediriger vers /login si la session
- * n'est pas valide.
- */
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+
+import Spinner from "@/components/ui/Spinner";
+import { useAuth } from "@/context/AuthContext";
+import { defaultPathForRole } from "@/lib/access-control";
+import { userService } from "@/services/user-service";
+
 export default function Home() {
-  redirect("/map");
+  const router = useRouter();
+  const { user, isInitializing } = useAuth();
+
+  useEffect(() => {
+    if (isInitializing) return;
+    if (!user) {
+      router.replace("/login");
+      return;
+    }
+    userService.me()
+      .then((profile) => router.replace(defaultPathForRole(profile.role)))
+      .catch(() => router.replace("/login"));
+  }, [isInitializing, user, router]);
+
+  return <main className="flex min-h-screen items-center justify-center bg-[#F6F8F3]"><Spinner label="Ouverture de votre espace..." /></main>;
 }

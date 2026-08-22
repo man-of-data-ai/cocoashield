@@ -1,13 +1,3 @@
-/**
- * Filtrage combiné du dashboard cartographique (§5.3, exigence 16) :
- * période, mission, sévérité, vecteur de capture, qualité de géolocalisation.
- *
- * Le filtrage opère au niveau image (la granularité la plus fine dont on
- * dispose), puis les résultats sont ré-agrégés par parcelle pour recolorer
- * les zones et construire les couches cartographiques. Tout se fait côté
- * client à partir des données déjà chargées : aucun rechargement réseau
- * n'est nécessaire lorsqu'un filtre change.
- */
 
 import type {
   Analysis,
@@ -32,7 +22,6 @@ export type MapFiltersState = {
   droneProfileIds: string[];
   geolocQualities: GeolocationQuality[];
   period: PeriodPreset;
-  /** Utilisés uniquement quand period === "custom" (format YYYY-MM-DD). */
   customStart: string | null;
   customEnd: string | null;
 };
@@ -65,14 +54,12 @@ export const DEFAULT_MAP_FILTERS: MapFiltersState = {
   customEnd: null,
 };
 
-/** Une image "aplatie", avec ses parents parcelle/analyse pour le contexte. */
 export type ImageEntry = {
   parcel: Parcel;
   analysis: Analysis;
   image: AnalysisImage;
 };
 
-/** Aplatit toutes les parcelles en liste d'images individuelles. */
 export function collectImageEntries(parcels: Parcel[]): ImageEntry[] {
   const entries: ImageEntry[] = [];
   for (const parcel of parcels) {
@@ -93,9 +80,6 @@ function periodStartDate(period: PeriodPreset, now: Date): Date | null {
   return start;
 }
 
-/** Filtre les images par vecteur, qualité géoloc, mission et période. La
- * sévérité et la recherche par nom se font en aval, sur les parcelles
- * ré-agrégées (voir applySeverityAndSearchFilters). */
 export function applyDataFilters(
   entries: ImageEntry[],
   filters: MapFiltersState
@@ -151,7 +135,6 @@ export type ParcelAggregate = {
   infectedImages: number;
 };
 
-/** Ré-agrège les images filtrées par parcelle, avec sévérité recalculée. */
 export function aggregateByParcel(entries: ImageEntry[]): ParcelAggregate[] {
   const byParcel = new Map<string, ImageEntry[]>();
   for (const entry of entries) {
@@ -178,7 +161,6 @@ export function aggregateByParcel(entries: ImageEntry[]): ParcelAggregate[] {
   return aggregates;
 }
 
-/** Applique le filtre sévérité + recherche texte sur les agrégats parcelle. */
 export function applySeverityAndSearchFilters(
   aggregates: ParcelAggregate[],
   filters: Pick<MapFiltersState, "activeLevels" | "search" | "parcelIds">

@@ -3,7 +3,6 @@ type SpinnerProps = {
   className?: string;
 };
 
-/** Indicateur de chargement générique, réutilisable dans toute l'application. */
 export default function Spinner({ label, className = "" }: SpinnerProps) {
   return (
     <span className={`inline-flex items-center gap-2 ${className}`} role="status">

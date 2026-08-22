@@ -69,7 +69,16 @@ export default function AppShell({ children, title, description, headerActions }
 
   const visibleNav = useMemo(() => profile ? NAV_ITEMS.filter((item) => item.area && canAccess(profile.role, item.area)) : [], [profile]);
   const currentArea = pathname ? areaForPath(pathname) : null;
-  const navigationArea = currentArea === "analysis" && searchParams.get("from") === "reports" ? "reports" : currentArea;
+  const analysisSource = searchParams.get("from");
+  const navigationArea = currentArea === "analysis"
+    ? analysisSource === "reports"
+      ? "reports"
+      : analysisSource === "map"
+        ? "map"
+        : analysisSource === "missions"
+          ? "missions"
+          : "parcels"
+    : currentArea;
   const denied = Boolean(profile && currentArea && !canAccess(profile.role, currentArea));
 
   async function handleLogout() { if (user) window.sessionStorage.removeItem(`cocoashield-session-start:${user.id}`); await logout(); router.replace("/login"); }

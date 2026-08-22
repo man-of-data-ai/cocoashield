@@ -1,7 +1,3 @@
-/**
- * leaflet.heat n'expose pas de types officiels : on déclare le strict
- * nécessaire (L.heatLayer) utilisé par HeatmapLayer.
- */
 import * as L from "leaflet";
 
 declare module "leaflet" {

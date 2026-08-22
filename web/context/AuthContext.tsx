@@ -1,10 +1,5 @@
 "use client";
 
-/**
- * Fournit l'état d'authentification à toute l'application via le Context
- * React. Centraliser cet état ici évite de refaire un appel de session
- * dans chaque page qui en a besoin.
- */
 
 import {
   createContext,
@@ -20,7 +15,6 @@ import type { LoginCredentials, RegisterCredentials, User } from "@/types/auth";
 
 type AuthContextValue = {
   user: User | null;
-  /** true tant que la session initiale n'a pas encore été vérifiée. */
   isInitializing: boolean;
   isAuthenticating: boolean;
   error: string | null;
@@ -110,10 +104,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
-/**
- * Hook d'accès à l'état d'authentification. Doit être utilisé sous un
- * <AuthProvider> (posé dans app/layout.tsx).
- */
 export function useAuth(): AuthContextValue {
   const context = useContext(AuthContext);
   if (!context) {

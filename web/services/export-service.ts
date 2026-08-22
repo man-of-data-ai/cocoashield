@@ -39,7 +39,6 @@ export const exportService = {
         if (Array.isArray(payload.message)) message = payload.message.join(" ");
         else if (payload.message) message = payload.message;
       } catch {
-        // réponse non JSON
       }
       throw new ApiError(message, response.status);
     }

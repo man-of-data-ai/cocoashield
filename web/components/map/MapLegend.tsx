@@ -8,7 +8,6 @@ import {
 
 const LEGEND_LEVELS: SeverityLevel[] = ["faible", "modere", "eleve", "critique"];
 
-/** Légende des couleurs de sévérité, superposée à la carte. */
 export default function MapLegend() {
   return (
     <div className="pointer-events-none absolute bottom-3 left-3 z-[1000] min-w-[160px] space-y-1.5 rounded-xl border border-slate-200 bg-white/95 p-3 text-xs shadow backdrop-blur">

@@ -1,10 +1,5 @@
 "use client";
 
-/**
- * Composant de présentation pur : il ne connaît pas la mécanique d'appel
- * réseau, seulement une fonction `onSubmit` à invoquer avec les identifiants
- * saisis. Toute la logique d'authentification vit dans useAuth / authService.
- */
 
 import { useState, type FormEvent } from "react";
 

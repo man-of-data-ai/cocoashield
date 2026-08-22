@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ArrowDownRight,
   ArrowRight,
@@ -90,7 +90,6 @@ export default function ComparaisonPage() {
   const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
-  const comparisonRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -157,19 +156,39 @@ export default function ComparaisonPage() {
       setExportError("Sélectionnez deux campagnes différentes contenant des données avant l’export.");
       return;
     }
-    if (!comparisonRef.current) { setExportError("Le comparatif n’est pas encore prêt à être exporté."); return; }
     setIsExporting(true);
     setExportError(null);
     try {
-      await exportComparisonPdf(
-        comparisonRef.current,
-        `${leftMission.name} (${missionDate(leftMission)}) vs ${rightMission.name} (${missionDate(rightMission)})`
-      );
+      const leftByParcel = new Map(leftSnapshot.parcels.map((snapshot) => [snapshot.parcel.id, snapshot]));
+      const rightByParcel = new Map(rightSnapshot.parcels.map((snapshot) => [snapshot.parcel.id, snapshot]));
+      exportComparisonPdf({
+        leftName: leftMission.name,
+        leftDate: missionDate(leftMission),
+        rightName: rightMission.name,
+        rightDate: missionDate(rightMission),
+        leftInfectionRate: leftSnapshot.infectionRate,
+        rightInfectionRate: rightSnapshot.infectionRate,
+        leftInfectedAreaSquareMeters: leftSnapshot.infectedAreaSquareMeters,
+        rightInfectedAreaSquareMeters: rightSnapshot.infectedAreaSquareMeters,
+        leftProcessedImages: leftSnapshot.processedImages,
+        rightProcessedImages: rightSnapshot.processedImages,
+        leftInfectedImages: leftSnapshot.infectedImages,
+        rightInfectedImages: rightSnapshot.infectedImages,
+        parcels: referenceParcels.map((parcel) => {
+          const left = leftByParcel.get(parcel.id);
+          const right = rightByParcel.get(parcel.id);
+          return {
+            name: parcel.name,
+            leftRate: left?.infectionRate ?? null,
+            rightRate: right?.infectionRate ?? null,
+            leftLevel: left?.level ?? null,
+            rightLevel: right?.level ?? null,
+          };
+        }),
+      });
     } catch (err) {
       console.error(err);
-      setExportError(
-        "L'export PDF a échoué. Réessayez après le chargement complet des fonds de carte."
-      );
+      setExportError("Le PDF comparatif n’a pas pu être généré. Réessayez dans quelques instants.");
     } finally {
       setIsExporting(false);
     }
@@ -253,7 +272,7 @@ export default function ComparaisonPage() {
           )}
 
           {leftSnapshot && rightSnapshot && leftMission && rightMission && leftMission.id !== rightMission.id ? (
-            <div ref={comparisonRef} className="space-y-5 rounded-2xl bg-[#F6F8F3] p-0.5">
+            <div className="space-y-5 rounded-2xl bg-[#F6F8F3] p-0.5">
               <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                 <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                   <div className="flex items-center justify-between">

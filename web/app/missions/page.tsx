@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { CalendarDays, Route, Search, SlidersHorizontal, Eye, Download } from "lucide-react";
 
@@ -128,6 +130,9 @@ function buildMissionRows(missions: Mission[], parcels: Parcel[]): MissionRow[] 
 }
 
 export default function MissionsPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const requestedMissionId = searchParams.get("mission");
   const [missions, setMissions] = useState<Mission[]>([]);
   const [parcels, setParcels] = useState<Parcel[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -176,6 +181,17 @@ export default function MissionsPage() {
   }, []);
 
   const rows = useMemo(() => buildMissionRows(missions, parcels), [missions, parcels]);
+
+  const requestedMissionRow = useMemo(() => requestedMissionId ? rows.find((item) => item.mission.id === requestedMissionId) ?? null : null, [requestedMissionId, rows]);
+  const activeMissionRow = selectedMissionRow ?? requestedMissionRow;
+
+  const selectedMissionLinks = useMemo(() => {
+    if (!activeMissionRow) return [];
+    return parcels.flatMap((parcel) => (parcel.analyses ?? [])
+      .filter((analysis) => analysis.missionId === activeMissionRow.mission.id)
+      .map((analysis) => ({ parcel, analysis }))
+    ).sort((a,b)=>new Date(b.analysis.createdAt).getTime()-new Date(a.analysis.createdAt).getTime());
+  }, [activeMissionRow, parcels]);
 
   const availableVectors = useMemo(
     () =>
@@ -548,16 +564,17 @@ export default function MissionsPage() {
         </div>
       )}
 
-      <Dialog open={selectedMissionRow !== null} onClose={() => setSelectedMissionRow(null)} title="Détail de la mission">
-        {selectedMissionRow && <div className="space-y-4">
-          <div className="rounded-2xl bg-[#F7F9F5] p-4"><h3 className="font-bold text-slate-900">{selectedMissionRow.mission.name}</h3><p className="mt-1 text-xs text-slate-500">{formatDate(selectedMissionRow.date)}</p>{selectedMissionRow.mission.notes && <p className="mt-3 text-sm leading-6 text-slate-600">{selectedMissionRow.mission.notes}</p>}</div>
+      <Dialog open={activeMissionRow !== null} onClose={() => { setSelectedMissionRow(null); if (requestedMissionId) router.replace("/missions"); }} title="Détail de la mission">
+        {activeMissionRow && <div className="space-y-4">
+          <div className="rounded-2xl bg-[#F7F9F5] p-4"><h3 className="font-bold text-slate-900">{activeMissionRow.mission.name}</h3><p className="mt-1 text-xs text-slate-500">{formatDate(activeMissionRow.date)}</p>{activeMissionRow.mission.notes && <p className="mt-3 text-sm leading-6 text-slate-600">{activeMissionRow.mission.notes}</p>}</div>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <div className="rounded-2xl border border-slate-200 p-3"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Images</p><p className="mt-1 font-bold text-slate-800">{selectedMissionRow.imageCount}</p></div>
-            <div className="rounded-2xl border border-slate-200 p-3"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Parcelles</p><p className="mt-1 font-bold text-slate-800">{selectedMissionRow.parcelCount}</p></div>
-            <div className="rounded-2xl border border-slate-200 p-3"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Surface</p><p className="mt-1 font-bold text-slate-800">{selectedMissionRow.surfaceSquareMeters > 0 ? formatSurface(selectedMissionRow.surfaceSquareMeters) : "—"}</p></div>
-            <div className="rounded-2xl border border-slate-200 p-3"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Statut</p><p className="mt-1 font-bold text-slate-800">{STATUS_LABELS[selectedMissionRow.status]}</p></div>
+            <div className="rounded-2xl border border-slate-200 p-3"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Images</p><p className="mt-1 font-bold text-slate-800">{activeMissionRow.imageCount}</p></div>
+            <div className="rounded-2xl border border-slate-200 p-3"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Parcelles</p><p className="mt-1 font-bold text-slate-800">{activeMissionRow.parcelCount}</p></div>
+            <div className="rounded-2xl border border-slate-200 p-3"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Surface</p><p className="mt-1 font-bold text-slate-800">{activeMissionRow.surfaceSquareMeters > 0 ? formatSurface(activeMissionRow.surfaceSquareMeters) : "—"}</p></div>
+            <div className="rounded-2xl border border-slate-200 p-3"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Statut</p><p className="mt-1 font-bold text-slate-800">{STATUS_LABELS[activeMissionRow.status]}</p></div>
           </div>
-          <button type="button" onClick={() => downloadMission(selectedMissionRow)} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#244B32] px-4 py-2.5 text-sm font-bold text-white"><Download className="h-4 w-4"/>Télécharger la mission</button>
+          <div><h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Parcelles et analyses associées</h4>{selectedMissionLinks.length === 0 ? <p className="mt-2 rounded-2xl bg-slate-50 p-3 text-xs text-slate-500">Cette mission n’a pas encore d’analyse associée.</p> : <div className="mt-2 space-y-2">{selectedMissionLinks.map(({parcel,analysis})=><div key={analysis.id} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 p-3"><div className="min-w-0"><Link href={`/parcels/${parcel.id}`} className="truncate text-xs font-bold text-slate-800 hover:text-[#244B32]">{parcel.name}</Link><p className="mt-1 text-[11px] text-slate-400">Analyse du {new Date(analysis.createdAt).toLocaleDateString("fr-FR")} · {analysis.images.length} image{analysis.images.length>1?"s":""}</p></div><Link href={`/parcels/${parcel.id}/analyses/${analysis.id}?from=missions`} className="shrink-0 rounded-xl border border-[#D9E5D3] px-3 py-2 text-[11px] font-bold text-[#31583B] hover:bg-[#F6FAF3]">Voir l’analyse</Link></div>)}</div>}</div>
+          <button type="button" onClick={() => downloadMission(activeMissionRow)} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#244B32] px-4 py-2.5 text-sm font-bold text-white"><Download className="h-4 w-4"/>Télécharger la mission</button>
         </div>}
       </Dialog>
     </AppShell>

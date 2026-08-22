@@ -2,7 +2,8 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 
 import AppShell from "@/components/layout/AppShell";
 import KpiBanner from "@/components/map/KpiBanner";
@@ -57,11 +58,10 @@ function freshnessLabel(entries: ReturnType<typeof collectImageEntries>): string
   return `${days} j`;
 }
 
-/**
- * Vue Carte : filtres combinables, parcelles délimitées et couches de sévérité,
- * détails de zone et export rapide de l'état cartographique actuellement visible.
- */
 export default function MapDashboardPage() {
+  const searchParams = useSearchParams();
+  const requestedParcelId = searchParams.get("parcel");
+  const requestedAnalysisId = searchParams.get("analysis");
   const [parcels, setParcels] = useState<Parcel[]>([]);
   const [missions, setMissions] = useState<Mission[]>([]);
   const [droneProfiles, setDroneProfiles] = useState<DroneProfile[]>([]);
@@ -70,13 +70,12 @@ export default function MapDashboardPage() {
   const [filters, setFilters] = useState<MapFiltersState>(DEFAULT_MAP_FILTERS);
   const [layers, setLayers] = useState<MapLayersState>(DEFAULT_LAYERS);
   const [basemap, setBasemap] = useState<MapBasemap>("satellite");
-  const [selectedParcelId, setSelectedParcelId] = useState<string | null>(null);
+  const [selectedParcelId, setSelectedParcelId] = useState<string | null>(requestedParcelId);
   const [fullDetailsParcel, setFullDetailsParcel] = useState<Parcel | null>(null);
   const [selectedRiskZone, setSelectedRiskZone] = useState<RiskZone | null>(null);
   const [isFullDetailsOpen, setIsFullDetailsOpen] = useState(false);
   const [isFullDetailsLoading, setIsFullDetailsLoading] = useState(false);
   const [fullDetailsError, setFullDetailsError] = useState<string | null>(null);
-  const mapExportRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -129,8 +128,6 @@ export default function MapDashboardPage() {
   const dataFilteredEntries = useMemo(() => applyDataFilters(allImageEntries, filters), [allImageEntries, filters]);
   const parcelAggregates = useMemo(() => aggregateByParcel(dataFilteredEntries), [dataFilteredEntries]);
 
-  // Les parcelles sans image restent cartographiées quand les filtres de données
-  // n'imposent pas une mission/vecteur/qualité/période spécifique.
   const aggregatesWithEmptyParcels = useMemo(() => {
     const byId = new Map(parcelAggregates.map((aggregate) => [aggregate.parcel.id, aggregate]));
     const dataFilterRestrictive =
@@ -168,13 +165,17 @@ export default function MapDashboardPage() {
   const visibleRiskZones = useMemo(() => {
     const analyses = new Map<string, { parcel: Parcel; analysis: (typeof visibleImageEntries)[number]["analysis"]; imageIds: Set<string> }>();
     for (const entry of visibleImageEntries) {
+      if (requestedAnalysisId && entry.analysis.id !== requestedAnalysisId) continue;
       const current = analyses.get(entry.analysis.id) ?? { parcel: entry.parcel, analysis: entry.analysis, imageIds: new Set<string>() };
       current.imageIds.add(entry.image.id);
       analyses.set(entry.analysis.id, current);
     }
     return Array.from(analyses.values()).flatMap(({ parcel, analysis, imageIds }) => riskZonesFromAnalysis(parcel, analysis, imageIds));
-  }, [visibleImageEntries]);
+  }, [visibleImageEntries, requestedAnalysisId]);
   const activeSeverityLevels = filters.activeLevels.filter((level): level is Severity => level !== "inconnu");
+  const requestedAnalysis = requestedAnalysisId
+    ? parcels.flatMap((parcel) => (parcel.analyses ?? []).map((analysis) => ({ parcel, analysis }))).find((entry) => entry.analysis.id === requestedAnalysisId) ?? null
+    : null;
 
   const kpis = useMemo(() => {
     const missionIds = new Set(visibleImageEntries.map((entry) => entry.analysis.missionId).filter((id): id is string => Boolean(id)));
@@ -192,6 +193,7 @@ export default function MapDashboardPage() {
 
   return (
     <AppShell title="Carte">
+      {requestedAnalysisId && requestedParcelId && <div className="mb-4"><Alert variant="info">Vue ouverte depuis une analyse : la parcelle concernée est présélectionnée et les zones à risque affichées correspondent à cette analyse.</Alert></div>}
       {error && <Alert variant="error">{error}</Alert>}
 
       {isLoading ? (
@@ -213,8 +215,8 @@ export default function MapDashboardPage() {
           <div className="grid gap-4 xl:grid-cols-[300px_minmax(0,1fr)_330px] xl:items-start">
             <div className="relative z-20"><MapFilters filters={filters} onChange={setFilters} missions={missions} parcels={parcels} droneProfiles={droneProfiles} /></div>
             <div className="overflow-hidden rounded-[24px] border border-[#DFE7DB] bg-white shadow-sm">
-                <MapToolbar basemap={basemap} onBasemapChange={setBasemap} layers={layers} onToggleLayer={toggleLayer} exportTargetRef={mapExportRef} hasExportData={visibleAggregates.length > 0} />
-                <div ref={mapExportRef} className="relative h-[640px] min-h-[520px] overflow-hidden bg-slate-100 xl:h-[720px]">
+                <MapToolbar basemap={basemap} onBasemapChange={setBasemap} layers={layers} onToggleLayer={toggleLayer} exportData={{ parcels: visibleAggregates.map((aggregate) => ({ id: aggregate.parcel.id, name: aggregate.parcel.name, boundary: aggregate.parcel.boundary })), riskZones: visibleRiskZones.filter((zone) => activeSeverityLevels.includes(zone.level)) }} exportContext={{ title: requestedAnalysis ? `Analyse · ${requestedAnalysis.parcel.name}` : "Cocoashield — Cartographie phytosanitaire", subtitle: requestedAnalysis ? `Analyse du ${new Date(requestedAnalysis.analysis.completedAt ?? requestedAnalysis.analysis.createdAt).toLocaleString("fr-FR", { dateStyle: "medium", timeStyle: "short" })}` : `${visibleAggregates.length} parcelle${visibleAggregates.length > 1 ? "s" : ""} affichée${visibleAggregates.length > 1 ? "s" : ""}`, details: requestedAnalysis ? [`Infection : ${(requestedAnalysis.analysis.infectionPercentage ?? 0).toFixed(1)} %`, `Sévérité : ${requestedAnalysis.analysis.severityLevel ?? "En attente"}`, `Zones à risque affichées : ${visibleRiskZones.length}`] : [`Missions : ${kpis.missionsCount}`, `Zones affichées : ${visibleRiskZones.length}`, `Surface infectée estimée : ${(kpis.infectedSurfaceSquareMeters / 10_000).toLocaleString("fr-FR", { maximumFractionDigits: 2 })} ha`] }} />
+                <div className="relative h-[640px] min-h-[520px] overflow-hidden bg-slate-100 xl:h-[720px]">
                   <ParcelsOverviewMap parcels={visibleAggregates} riskZones={visibleRiskZones} activeSeverityLevels={activeSeverityLevels} selectedParcelId={selectedParcelId} onSelectParcel={setSelectedParcelId} onSelectRiskZone={setSelectedRiskZone} basemap={basemap} layers={layers} />
                   <MapLegend />
                   <RiskZoneInfoPanel zone={selectedRiskZone} onClose={()=>setSelectedRiskZone(null)} />

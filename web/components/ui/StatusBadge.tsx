@@ -22,7 +22,6 @@ type StatusBadgeProps = {
   status: Status;
 };
 
-/** Badge coloré réutilisable pour le statut d'une parcelle ou le résultat d'une analyse. */
 export default function StatusBadge({ status }: StatusBadgeProps) {
   return (
     <span

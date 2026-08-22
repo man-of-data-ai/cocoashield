@@ -1,6 +1,3 @@
-/**
- * Types liés à l'authentification (backend NestJS + better-auth).
- */
 
 export type User = {
   id: string;
@@ -25,9 +22,6 @@ export type AuthResponse = {
   user: User;
 };
 
-/**
- * Forme normalisée d'une erreur renvoyée par l'API.
- */
 export type ApiErrorPayload = {
   message: string;
 };

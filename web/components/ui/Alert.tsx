@@ -11,7 +11,6 @@ const VARIANT_CLASSES: Record<AlertVariant, string> = {
   success: "border-emerald-200 bg-emerald-50 text-emerald-700",
 };
 
-/** Bandeau d'information / erreur réutilisable dans toute l'application. */
 export default function Alert({ variant = "info", children }: AlertProps) {
   return (
     <div

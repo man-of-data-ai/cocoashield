@@ -1,9 +1,5 @@
 "use client";
 
-/**
- * Composant de présentation pur, miroir de LoginForm : ne connaît pas la
- * mécanique d'appel réseau, seulement une fonction `onSubmit`.
- */
 
 import { useState, type FormEvent } from "react";
 
@@ -49,7 +45,7 @@ export default function RegisterForm({
           value={email}
           onChange={(event) => setEmail(event.target.value)}
           className="mt-1 w-full rounded-2xl border border-[#DCE6D7] bg-[#FBFCFA] px-4 py-3 text-slate-900 outline-none transition focus:border-[#87B940] focus:bg-white focus:ring-2 focus:ring-[#87B940]/15"
-          placeholder="vous@cocoashield.dev"
+          placeholder="vous@cocoashield.ci"
         />
       </div>
 
@@ -69,7 +65,7 @@ export default function RegisterForm({
           value={username}
           onChange={(event) => setUsername(event.target.value)}
           className="mt-1 w-full rounded-2xl border border-[#DCE6D7] bg-[#FBFCFA] px-4 py-3 text-slate-900 outline-none transition focus:border-[#87B940] focus:bg-white focus:ring-2 focus:ring-[#87B940]/15"
-          placeholder="planteur_ci"
+          placeholder="jean.dupont"
         />
       </div>
 

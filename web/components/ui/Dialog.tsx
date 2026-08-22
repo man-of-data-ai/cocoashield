@@ -1,6 +1,5 @@
 "use client";
 
-/** Modale générique réutilisable : overlay + panneau centré. */
 
 type DialogProps = {
   open: boolean;

@@ -8,7 +8,6 @@ type KpiBannerProps = {
   freshnessLabel: string;
 };
 
-/** Bandeau synthétique de la vue Carte, alimenté par les filtres actifs. */
 export default function KpiBanner({
   missionsCount,
   activeZones,

@@ -29,5 +29,5 @@ export function canAccess(role: UserRole, area: AppArea): boolean {
 export function defaultPathForRole(role: UserRole): string {
   if (role === "direction_ccc") return "/map";
   if (role === "agronome_terrain") return "/parcels";
-  return "/map";
+  return "/utilisateurs";
 }

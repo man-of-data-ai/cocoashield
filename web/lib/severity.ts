@@ -1,26 +1,15 @@
-/**
- * Sévérité graduée d'une parcelle, calculée côté client à partir du taux
- * d'images classées "infected" parmi les images déjà traitées de toutes ses
- * analyses. Le backend ne stocke qu'un statut binaire par image
- * (AnalysisResult: healthy | infected) ; on agrège ce signal en 4 niveaux
- * pour se rapprocher de la maquette (faible / modérée / élevée / critique)
- * sans avoir à modifier le modèle de données.
- */
 
 import type { Analysis, AnalysisImage, Parcel } from "@/types/parcel";
 
 export type Severity = "faible" | "modere" | "eleve" | "critique";
 
-/** Sévérité pour une parcelle qui n'a pas encore de résultat exploitable. */
 export type SeverityLevel = Severity | "inconnu";
 
 export type ParcelSeverity = {
   level: SeverityLevel;
-  /** Taux d'images infectées parmi les images traitées, de 0 à 1. */
   infectionRate: number;
   processedImages: number;
   infectedImages: number;
-  /** Nombre total d'images (traitées ou non) toutes analyses confondues. */
   totalImages: number;
 };
 
@@ -32,7 +21,6 @@ export const SEVERITY_LABELS: Record<SeverityLevel, string> = {
   inconnu: "—",
 };
 
-/** Couleur pleine (marqueurs, badges) par niveau de sévérité. */
 export const SEVERITY_COLORS: Record<SeverityLevel, string> = {
   faible: "#10b981",
   modere: "#facc15",
@@ -41,7 +29,6 @@ export const SEVERITY_COLORS: Record<SeverityLevel, string> = {
   inconnu: "#94a3b8",
 };
 
-/** Classes Tailwind équivalentes, pour les badges/légendes. */
 export const SEVERITY_BADGE_CLASSES: Record<SeverityLevel, string> = {
   faible: "bg-emerald-500",
   modere: "bg-yellow-400",
@@ -58,7 +45,6 @@ const SEVERITY_ORDER: SeverityLevel[] = [
   "critique",
 ];
 
-/** Seuils par défaut (taux d'infection) délimitant chaque niveau. */
 export type SeverityThresholds = {
   faible: number;
   modere: number;
@@ -93,13 +79,6 @@ function levelFromRate(
   return "faible";
 }
 
-/**
- * Calcule la sévérité à partir d'un ensemble d'images déjà résolu (par
- * exemple le sous-ensemble retenu après application des filtres période /
- * mission / vecteur / qualité géoloc). Toutes les images "processed"
- * (traitées avec un résultat) sont agrégées ; un ensemble sans image
- * traitée est "inconnu".
- */
 export function computeSeverityFromImages(
   images: AnalysisImage[],
   thresholds?: SeverityThresholds
@@ -120,11 +99,6 @@ export function computeSeverityFromImages(
   return { level, infectionRate, processedImages, infectedImages, totalImages };
 }
 
-/**
- * Calcule la sévérité d'une parcelle à partir de la totalité de ses
- * analyses (aucun filtre appliqué). Pratique pour les vues qui n'ont pas
- * besoin de filtrage (ex: liste des parcelles).
- */
 export function computeParcelSeverity(
   parcel: Pick<Parcel, "analyses">,
   thresholds?: SeverityThresholds
@@ -134,7 +108,6 @@ export function computeParcelSeverity(
   return computeSeverityFromImages(images, thresholds);
 }
 
-/** Compare deux niveaux de sévérité (ordre croissant de gravité). */
 export function severityRank(level: SeverityLevel): number {
   return SEVERITY_ORDER.indexOf(level);
 }

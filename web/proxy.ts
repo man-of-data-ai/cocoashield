@@ -23,7 +23,7 @@ const permissions: Record<Role, string[]> = {
   agronome_terrain: ["parcels","map","comparison","missions","analysis"],
 };
 
-function home(role: Role) { return role === "agronome_terrain" ? "/parcels" : "/map"; }
+function home(role: Role) { if (role === "agronome_terrain") return "/parcels"; if (role === "direction_ccc") return "/map"; return "/utilisateurs"; }
 
 export async function proxy(request: NextRequest) {
   const cookie = request.headers.get("cookie") ?? "";

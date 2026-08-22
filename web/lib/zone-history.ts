@@ -2,13 +2,6 @@ import { computeParcelMetrics } from "@/lib/geo";
 import { computeSeverityFromImages, type SeverityLevel } from "@/lib/severity";
 import type { AnalysisImage, Mission, Parcel } from "@/types/parcel";
 
-/**
- * Vue historisée d'une zone pour une mission donnée. Le projet ne possède pas
- * d'entité `zone_history` dédiée côté API ; cette structure reconstruit le même
- * concept à partir des analyses historisées par mission déjà renvoyées avec les
- * parcelles. Ainsi le comparatif reste strictement cohérent avec les données
- * persistées, sans dupliquer ni inventer de mesures côté client.
- */
 export type ZoneHistoryParcelSnapshot = {
   parcel: Parcel;
   images: AnalysisImage[];

@@ -1,10 +1,5 @@
 "use client";
 
-/**
- * Calcule les métriques géométriques d'une parcelle (surface, périmètre,
- * centre) à partir de sa géométrie GeoJSON. Mémoïsé pour éviter de refaire
- * le calcul à chaque rendu.
- */
 
 import { useMemo } from "react";
 

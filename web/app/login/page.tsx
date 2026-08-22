@@ -9,6 +9,8 @@ import { Leaf, ShieldCheck, Sprout } from "lucide-react";
 import LoginForm from "@/components/auth/LoginForm";
 import { useAuth } from "@/context/AuthContext";
 import type { LoginCredentials } from "@/types/auth";
+import { userService } from "@/services/user-service";
+import { defaultPathForRole } from "@/lib/access-control";
 
 export default function LoginPage() {
   return <Suspense fallback={null}><LoginPageContent /></Suspense>;
@@ -20,13 +22,19 @@ function LoginPageContent() {
   const { user, isInitializing, isAuthenticating, error, login } = useAuth();
 
   useEffect(() => {
-    if (!isInitializing && user) router.replace(searchParams.get("from") ?? "/map");
+    if (isInitializing || !user) return;
+    const requested = searchParams.get("from");
+    if (requested) { router.replace(requested); return; }
+    userService.me().then((profile) => router.replace(defaultPathForRole(profile.role))).catch(() => router.replace("/map"));
   }, [isInitializing, user, router, searchParams]);
 
   async function handleSubmit(credentials: LoginCredentials) {
     try {
       await login(credentials);
-      router.replace(searchParams.get("from") ?? "/map");
+      const requested = searchParams.get("from");
+      if (requested) { router.replace(requested); return; }
+      const profile = await userService.me();
+      router.replace(defaultPathForRole(profile.role));
     } catch {}
   }
 
