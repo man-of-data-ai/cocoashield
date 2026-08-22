@@ -2,7 +2,7 @@ import { betterAuth } from 'better-auth';
 import { APIError } from 'better-auth/api';
 import { username } from 'better-auth/plugins';
 import { Pool } from 'pg';
-import { routes } from '../../routes';
+import { auth_routes } from './routes';
 
 /**
  * Configuration nécessaire à better-auth.
@@ -34,7 +34,7 @@ export function createAuth(config: AuthConfig) {
     database: pool,
     secret: config.betterAuthSecret,
     baseURL: config.betterAuthUrl,
-    basePath: routes.betterAuthBasePath,
+    basePath: auth_routes.base_path,
     trustedOrigins: [config.webUrl],
     emailAndPassword: {
       enabled: true,

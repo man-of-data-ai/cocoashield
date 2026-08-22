@@ -10,7 +10,8 @@ import { ApiOperation, ApiProduces, ApiTags } from '@nestjs/swagger';
 import { Session } from '@thallesp/nestjs-better-auth';
 import type { UserSession } from '@thallesp/nestjs-better-auth';
 import type { Response } from 'express';
-import { routes } from '../../routes';
+import { Constants } from '../../core/constants/constants';
+import { export_routes } from './routes';
 import { AuditInterceptor } from '../audit/audit.interceptor';
 import { Audit } from '../audit/decorators/audit.decorator';
 import { AppRoles } from '../users/decorators/app-roles.decorator';
@@ -21,17 +22,17 @@ import { ExportsService } from './exports.service';
 @ApiTags('Exports')
 @AppRoles(UserRole.ADMINISTRATEUR)
 @UseInterceptors(AuditInterceptor)
-@Controller(`${routes.version}${routes.exports.root}`)
+@Controller(Constants.API.VERSION)
 export class ExportsController {
   constructor(private readonly exportsService: ExportsService) {}
 
-  @Get()
+  @Get(export_routes.root)
   @ApiOperation({ summary: 'Historique des exports générés' })
   list(@Session() session: UserSession) {
     return this.exportsService.list(session.user.id);
   }
 
-  @Post(routes.exports.generate)
+  @Post(export_routes.generate)
   @Audit({ action: 'export.generated', targetType: 'export' })
   @ApiOperation({ summary: 'Générer une archive d’export' })
   @ApiProduces('application/zip')

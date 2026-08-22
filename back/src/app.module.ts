@@ -7,9 +7,8 @@ import { fromNodeHeaders } from 'better-auth/node';
 import type { Request } from 'express';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { ConfigModule } from './libs/infrastructure/config/config.module';
-import { Environment } from './libs/infrastructure/config/config.schema';
-import { ConfigService } from './libs/infrastructure/config/config.service';
+import { ConfigModule } from './core/config/config.module';
+import { ConfigService } from './core/config/services/config.service';
 import { AnalysesModule } from './modules/analyses/analyses.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { AuthController } from './modules/auth/auth.controller';
@@ -33,7 +32,7 @@ import { UsersModule } from './modules/users/users.module';
           betterAuthSecret: config.betterAuthSecret,
           betterAuthUrl: config.betterAuthUrl,
           webUrl: config.webUrl,
-          isProduction: config.nodeEnv === Environment.PRODUCTION,
+          isProduction: config.isProduction,
         }),
       }),
       inject: [ConfigService],

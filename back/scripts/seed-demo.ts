@@ -423,7 +423,7 @@ function assertSafeEnvironment(): void {
       `Seed refusé : NODE_ENV vaut "${nodeEnv}", ce script est réservé au développement local.`,
     );
   }
-  const host = process.env.DB_HOST ?? 'localhost';
+  const host = process.env.DATABASE_HOST ?? 'localhost';
   if (!['localhost', '127.0.0.1', 'db', 'postgres'].includes(host)) {
     throw new Error(
       `Seed refusé : la base cible (${host}) n'est pas locale. Ce script efface des données.`,

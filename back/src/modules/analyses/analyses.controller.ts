@@ -24,7 +24,9 @@ import {
 import { Session } from '@thallesp/nestjs-better-auth';
 import type { UserSession } from '@thallesp/nestjs-better-auth';
 import { createReadStream } from 'fs';
-import { routes } from '../../routes';
+import { Constants } from '../../core/constants/constants';
+import { parcel_routes } from '../parcels/routes';
+import { analysis_image_routes, analysis_routes } from './routes';
 import { AuditInterceptor } from '../audit/audit.interceptor';
 import { Audit } from '../audit/decorators/audit.decorator';
 import { AppRoles } from '../users/decorators/app-roles.decorator';
@@ -37,11 +39,11 @@ import { UpdateAnalysisNotesDto } from './dtos/update-analysis-notes.dto';
 @ApiTags('Analyses')
 @AppRoles(UserRole.ADMINISTRATEUR, UserRole.AGRONOME_TERRAIN)
 @UseInterceptors(AuditInterceptor)
-@Controller(`${routes.version}${routes.parcels.root}`)
+@Controller(Constants.API.VERSION)
 export class ParcelAnalysesController {
   constructor(private readonly analysesService: AnalysesService) {}
 
-  @Post(routes.parcels.analyses)
+  @Post(parcel_routes.analyses)
   @UseInterceptors(FilesInterceptor('images'))
   @Audit({
     action: 'analysis.created',
@@ -92,11 +94,11 @@ export class ParcelAnalysesController {
   UserRole.DIRECTION_CCC,
 )
 @UseInterceptors(AuditInterceptor)
-@Controller(`${routes.version}${routes.analyses.root}`)
+@Controller(Constants.API.VERSION)
 export class AnalysesController {
   constructor(private readonly analysesService: AnalysesService) {}
 
-  @Get(routes.analyses.byId)
+  @Get(analysis_routes.details)
   @ApiOperation({ summary: 'Détail d’une analyse' })
   findOne(
     @Session() session: UserSession,
@@ -105,7 +107,7 @@ export class AnalysesController {
     return this.analysesService.findOneForOwner(id, session.user.id);
   }
 
-  @Patch(routes.analyses.byId)
+  @Patch(analysis_routes.details)
   @Audit({
     action: 'analysis.notes.updated',
     targetType: 'analysis',
@@ -120,7 +122,7 @@ export class AnalysesController {
     return this.analysesService.updateNotes(id, session.user.id, dto.notes);
   }
 
-  @Delete(routes.analyses.byId)
+  @Delete(analysis_routes.details)
   @HttpCode(HttpStatus.NO_CONTENT)
   @AppRoles(UserRole.ADMINISTRATEUR, UserRole.AGRONOME_TERRAIN)
   @Audit({
@@ -136,7 +138,7 @@ export class AnalysesController {
     return this.analysesService.softDelete(id, session.user.id);
   }
 
-  @Post(routes.analyses.restoreById)
+  @Post(analysis_routes.restore)
   @AppRoles(UserRole.ADMINISTRATEUR, UserRole.AGRONOME_TERRAIN)
   @Audit({
     action: 'analysis.restored',
@@ -158,11 +160,11 @@ export class AnalysesController {
   UserRole.AGRONOME_TERRAIN,
   UserRole.DIRECTION_CCC,
 )
-@Controller(`${routes.version}${routes.analysisImages.root}`)
+@Controller(Constants.API.VERSION)
 export class AnalysisImagesController {
   constructor(private readonly analysesService: AnalysesService) {}
 
-  @Get(routes.analysisImages.file)
+  @Get(analysis_image_routes.file)
   @ApiOperation({ summary: 'Servir le fichier image d’une analyse' })
   @ApiProduces('image/*')
   async getFile(

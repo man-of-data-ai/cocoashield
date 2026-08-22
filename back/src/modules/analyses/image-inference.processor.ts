@@ -2,7 +2,7 @@ import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import * as path from 'path';
-import { ConfigService } from '../../libs/infrastructure/config/config.service';
+import { ConfigService } from '../../core/config/services/config.service';
 import { AnalysesService } from './analyses.service';
 import { IMAGE_INFERENCE_QUEUE, ImageInferenceJob } from './analyses.constants';
 import { AnalysisImageStatus } from './entities/analysis-image.entity';

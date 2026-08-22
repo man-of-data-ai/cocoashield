@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { Queue } from 'bullmq';
 import * as path from 'path';
-import { ConfigService } from '../../libs/infrastructure/config/config.service';
+import { ConfigService } from '../../core/config/services/config.service';
 import { MissionsService } from '../missions/missions.service';
 import { ParcelStatus } from '../parcels/entities/parcel.entity';
 import { ParcelsService } from '../parcels/parcels.service';

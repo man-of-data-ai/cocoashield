@@ -13,7 +13,7 @@
 services:
   postgres:
     ports:
-      - "${DB_PORT:-5432}:5432"
+      - "${DATABASE_PORT:-5432}:5432"
 
   redis:
     ports:

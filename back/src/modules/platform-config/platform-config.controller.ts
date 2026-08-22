@@ -17,7 +17,8 @@ import {
 import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { Session } from '@thallesp/nestjs-better-auth';
 import type { UserSession } from '@thallesp/nestjs-better-auth';
-import { routes } from '../../routes';
+import { Constants } from '../../core/constants/constants';
+import { configuration_routes, drone_profile_routes } from './routes';
 import { AuditInterceptor } from '../audit/audit.interceptor';
 import { Audit } from '../audit/decorators/audit.decorator';
 import { AppRoles } from '../users/decorators/app-roles.decorator';
@@ -30,17 +31,17 @@ import { PlatformConfigService } from './platform-config.service';
 @ApiTags('Configuration')
 @AppRoles(UserRole.ADMINISTRATEUR)
 @UseInterceptors(AuditInterceptor)
-@Controller(`${routes.version}${routes.configuration.root}`)
+@Controller(Constants.API.VERSION)
 export class PlatformConfigController {
   constructor(private readonly configService: PlatformConfigService) {}
 
-  @Get(routes.configuration.settings)
+  @Get(configuration_routes.settings)
   @ApiOperation({ summary: 'Seuils de sévérité et paramètres de clustering' })
   getSettings(@Session() session: UserSession) {
     return this.configService.getSettings(session.user.id);
   }
 
-  @Patch(routes.configuration.settings)
+  @Patch(configuration_routes.settings)
   @Audit({
     action: 'configuration.settings.updated',
     targetType: 'configuration',
@@ -53,7 +54,7 @@ export class PlatformConfigController {
     return this.configService.updateSettings(session.user.id, dto);
   }
 
-  @Get(routes.configuration.droneProfiles)
+  @Get(drone_profile_routes.root)
   @ApiOperation({ summary: 'Lister les profils drone' })
   @ApiQuery({ name: 'activeOnly', required: false, type: Boolean })
   listProfiles(
@@ -64,7 +65,7 @@ export class PlatformConfigController {
     return this.configService.listDroneProfiles(session.user.id, activeOnly);
   }
 
-  @Post(routes.configuration.droneProfiles)
+  @Post(drone_profile_routes.root)
   @Audit({ action: 'drone_profile.created', targetType: 'drone_profile' })
   @ApiOperation({ summary: 'Créer un profil drone' })
   createProfile(
@@ -74,7 +75,7 @@ export class PlatformConfigController {
     return this.configService.createDroneProfile(session.user.id, dto);
   }
 
-  @Patch(routes.configuration.droneProfileById)
+  @Patch(drone_profile_routes.details)
   @Audit({
     action: 'drone_profile.updated',
     targetType: 'drone_profile',
@@ -89,7 +90,7 @@ export class PlatformConfigController {
     return this.configService.updateDroneProfile(session.user.id, id, dto);
   }
 
-  @Delete(routes.configuration.droneProfileById)
+  @Delete(drone_profile_routes.details)
   @HttpCode(HttpStatus.NO_CONTENT)
   @Audit({
     action: 'drone_profile.deleted',
@@ -104,7 +105,7 @@ export class PlatformConfigController {
     return this.configService.softDeleteDroneProfile(session.user.id, id);
   }
 
-  @Post(routes.configuration.droneProfileRestoreById)
+  @Post(drone_profile_routes.restore)
   @Audit({
     action: 'drone_profile.restored',
     targetType: 'drone_profile',

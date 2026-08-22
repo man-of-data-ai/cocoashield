@@ -6,7 +6,7 @@ import { createReadStream } from 'fs';
 import { access } from 'fs/promises';
 import * as path from 'path';
 import { Repository } from 'typeorm';
-import { ConfigService } from '../../libs/infrastructure/config/config.service';
+import { ConfigService } from '../../core/config/services/config.service';
 import { AnalysisImageStatus } from '../analyses/entities/analysis-image.entity';
 import { AnalysisResult } from '../analyses/entities/analysis-result.enum';
 import {

@@ -20,7 +20,8 @@ import {
 } from '@nestjs/swagger';
 import { Session } from '@thallesp/nestjs-better-auth';
 import type { UserSession } from '@thallesp/nestjs-better-auth';
-import { routes } from '../../routes';
+import { Constants } from '../../core/constants/constants';
+import { parcel_routes } from './routes';
 import { AuditInterceptor } from '../audit/audit.interceptor';
 import { Audit } from '../audit/decorators/audit.decorator';
 import { AppRoles } from '../users/decorators/app-roles.decorator';
@@ -32,11 +33,11 @@ import { ParcelsService } from './parcels.service';
 @ApiTags('Parcelles')
 @AppRoles(UserRole.ADMINISTRATEUR, UserRole.AGRONOME_TERRAIN)
 @UseInterceptors(AuditInterceptor)
-@Controller(`${routes.version}${routes.parcels.root}`)
+@Controller(Constants.API.VERSION)
 export class ParcelsController {
   constructor(private readonly parcelsService: ParcelsService) {}
 
-  @Post()
+  @Post(parcel_routes.root)
   @Audit({ action: 'parcel.created', targetType: 'parcel' })
   @ApiOperation({ summary: 'Créer une parcelle' })
   @ApiCreatedResponse({ description: 'Parcelle créée.' })
@@ -44,13 +45,13 @@ export class ParcelsController {
     return this.parcelsService.create(session.user.id, dto);
   }
 
-  @Get()
+  @Get(parcel_routes.root)
   @ApiOperation({ summary: "Lister les parcelles de l'utilisateur" })
   findAll(@Session() session: UserSession) {
     return this.parcelsService.findAllForOwner(session.user.id);
   }
 
-  @Get(routes.parcels.byId)
+  @Get(parcel_routes.details)
   @ApiOperation({ summary: 'Détail d’une parcelle' })
   @ApiOkResponse({ description: 'Parcelle, analyses et images associées.' })
   findOne(
@@ -60,7 +61,7 @@ export class ParcelsController {
     return this.parcelsService.findOneForOwner(id, session.user.id);
   }
 
-  @Patch(routes.parcels.verification)
+  @Patch(parcel_routes.verification)
   @Audit({
     action: 'parcel.verification.updated',
     targetType: 'parcel',
@@ -80,7 +81,7 @@ export class ParcelsController {
     );
   }
 
-  @Delete(routes.parcels.byId)
+  @Delete(parcel_routes.details)
   @HttpCode(HttpStatus.NO_CONTENT)
   @Audit({
     action: 'parcel.deleted',
@@ -101,7 +102,7 @@ export class ParcelsController {
     return this.parcelsService.softDelete(id, session.user.id);
   }
 
-  @Post(routes.parcels.restoreById)
+  @Post(parcel_routes.restore)
   @Audit({
     action: 'parcel.restored',
     targetType: 'parcel',
