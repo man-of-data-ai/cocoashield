@@ -4,6 +4,11 @@ import "leaflet/dist/leaflet.css";
 
 import { AuthProvider } from "@/context/AuthContext";
 
+// Application entièrement derrière authentification : aucun intérêt à
+// pré-rendre statiquement les pages au build (et plusieurs écrans lisent
+// useSearchParams sans Suspense, ce qui fait échouer le prérendu).
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Cartographie des parcelles",
   description:
