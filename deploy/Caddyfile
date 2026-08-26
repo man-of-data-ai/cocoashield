@@ -1,0 +1,11 @@
+# TLS automatique (Let's Encrypt) sur le domaine unique de l'application.
+# L'API n'est pas exposée directement : le web Next.js proxifie /v1/*.
+{$DOMAIN} {
+	encode gzip
+	reverse_proxy web:3000
+
+	# Les uploads d'images d'analyse peuvent être volumineux.
+	request_body {
+		max_size 100MB
+	}
+}
