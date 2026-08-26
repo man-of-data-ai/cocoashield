@@ -2,7 +2,7 @@ name: back
 
 on:
   push:
-    branches: [main, develop]
+    branches: [production, develop]
     paths:
       - "back/**"
       - "deploy/**"
@@ -40,7 +40,7 @@ jobs:
           images: ghcr.io/${{ github.repository }}-back
           tags: |
             type=sha,format=long
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/production' }}
       - uses: docker/build-push-action@v6
         with:
           context: back
@@ -50,7 +50,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=back
 
   deploy:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/production'
     needs: build
     runs-on: ubuntu-latest
     environment: production
