@@ -1,0 +1,39 @@
+name: model-release
+
+# Publie les artefacts du modèle comme assets de release quand un tag
+# `model-<version>` est poussé (ex: model-v3). L'image Docker du backend
+# télécharge ensuite l'onnx depuis cette release (voir back/Dockerfile).
+on:
+  push:
+    tags: ["model-*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          filter: blob:none
+          sparse-checkout: model
+      - name: Collect model artifacts
+        id: collect
+        run: |
+          VERSION="${GITHUB_REF_NAME#model-}"
+          ONNX="model/${VERSION}/cocoashield_${VERSION}.onnx"
+          test -f "$ONNX" || { echo "Modèle introuvable: $ONNX"; exit 1; }
+          shasum -a 256 "$ONNX" | awk '{print $1}' > "${ONNX}.sha256"
+          echo "onnx=$ONNX" >> "$GITHUB_OUTPUT"
+          cat "${ONNX}.sha256"
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: Modèle ${{ github.ref_name }}
+          body: >
+            Artefacts du modèle de classification CSSVD.
+            Empreinte sha256 de l'onnx publiée en asset — vérifiée au build
+            de l'image backend.
+          files: |
+            ${{ steps.collect.outputs.onnx }}
+            ${{ steps.collect.outputs.onnx }}.sha256
