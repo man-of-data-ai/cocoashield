@@ -92,7 +92,9 @@ export class AnalysesService {
         meta?.source === AnalysisImageSource.MOBILE && meta.result;
       const gps = await this.imageGeoService.extractGps(file.path);
 
-      const geolocationQuality = gps ? GeolocationQuality.PRECISE : GeolocationQuality.NONE;
+      const geolocationQuality = gps
+        ? GeolocationQuality.PRECISE
+        : GeolocationQuality.NONE;
 
       const image = await this.analysisImageRepository.create({
         analysisId: analysis.id,
@@ -195,7 +197,7 @@ export class AnalysesService {
     );
     const infectionPercentage =
       processed.length > 0 ? (infected.length / processed.length) * 100 : 0;
-    const severityLevel =
+    const severityLevel: 'faible' | 'modere' | 'eleve' | 'critique' =
       infectionPercentage >= 40
         ? 'critique'
         : infectionPercentage >= 25
@@ -209,7 +211,7 @@ export class AnalysesService {
         latitude: image.latitude!,
         longitude: image.longitude!,
         severity: Math.max(0.15, Math.min(1, infectionPercentage / 100)),
-        severityLevel: severityLevel as 'faible' | 'modere' | 'eleve' | 'critique',
+        severityLevel: severityLevel,
       }));
     const isInfected = infected.length > 0;
     const completedAt = new Date();

@@ -56,4 +56,13 @@ export class ConfigSchema {
   // Local disk storage
   @IsString()
   UPLOADS_DIR: string = './uploads';
+
+  // Inference model (ONNX). Le défaut pointe sur l'artefact du monorepo pour
+  // le développement ; en production l'image Docker fixe MODEL_PATH sur le
+  // modèle téléchargé depuis la release GitHub (voir back/Dockerfile).
+  @IsString()
+  MODEL_PATH: string = '../model/v3/cocoashield_v3.onnx';
+
+  @IsString()
+  MODEL_VERSION: string = 'v3';
 }

@@ -61,6 +61,12 @@ export class AnalysisImage extends RestEntity {
   @Column({ type: 'float', nullable: true })
   confidence: number | null;
 
+  // Version du modèle ayant produit le résultat (inférence serveur).
+  // Null pour les images pré-classifiées côté mobile tant que l'app
+  // ne remonte pas cette information.
+  @Column({ name: 'model_version', type: 'varchar', nullable: true })
+  modelVersion: string | null;
+
   @Column({ type: 'float', nullable: true })
   latitude: number | null;
 

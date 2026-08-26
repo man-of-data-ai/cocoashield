@@ -86,4 +86,12 @@ export class ConfigService {
   get uploadsDir(): string {
     return this.envConfig.UPLOADS_DIR;
   }
+
+  get modelPath(): string {
+    return this.envConfig.MODEL_PATH;
+  }
+
+  get modelVersion(): string {
+    return this.envConfig.MODEL_VERSION;
+  }
 }
