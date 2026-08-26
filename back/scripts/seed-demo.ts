@@ -37,7 +37,9 @@ import {
 } from '../src/modules/exports/entities/export-record.entity';
 import { AuditLog } from '../src/modules/audit/entities/audit-log.entity';
 
-const DEMO_PASSWORD = 'CocoaDemo2026!';
+// Surchargez SEED_DEMO_PASSWORD hors développement local : le défaut est
+// public (repo open) et ne doit jamais protéger un environnement réel.
+const DEMO_PASSWORD = process.env.SEED_DEMO_PASSWORD ?? 'CocoaDemo2026!';
 const DEMO_USERS = [
   {
     email: 'admin@cocoashield.local',
