@@ -5,7 +5,9 @@
  * en développement, synchronize reste la source du schéma.
  *
  * Usage : node scripts/apply-migrations.js
- * Connexion via DB_HOST / DB_PORT / DB_NAME / DB_USERNAME / DB_PASSWORD.
+ * Connexion via DATABASE_HOST / DATABASE_PORT / DATABASE_NAME /
+ * DATABASE_USERNAME / DATABASE_PASSWORD — mêmes noms que ceux validés par le
+ * CONFIG_SCHEMA de l'application, pour qu'il n'existe qu'un seul contrat.
  */
 const fs = require('fs');
 const path = require('path');
@@ -14,12 +16,21 @@ const { Client } = require('pg');
 const MIGRATIONS_DIR = path.join(__dirname, '..', 'migrations');
 
 async function main() {
+  // `pg` retombe silencieusement sur 127.0.0.1 quand host est undefined :
+  // échouer explicitement plutôt que boucler sur ECONNREFUSED.
+  const host = process.env.DATABASE_HOST;
+  if (!host) {
+    throw new Error(
+      'DATABASE_HOST est obligatoire pour appliquer les migrations',
+    );
+  }
+
   const client = new Client({
-    host: process.env.DB_HOST,
-    port: +(process.env.DB_PORT ?? 5432),
-    user: process.env.DB_USERNAME,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME,
+    host,
+    port: +(process.env.DATABASE_PORT ?? 5432),
+    user: process.env.DATABASE_USERNAME,
+    password: process.env.DATABASE_PASSWORD,
+    database: process.env.DATABASE_NAME,
   });
   await client.connect();
 
