@@ -6,7 +6,12 @@ import {
   type SeverityLevel,
 } from "@/lib/severity";
 
-const LEGEND_LEVELS: SeverityLevel[] = ["faible", "modere", "eleve", "critique"];
+const LEGEND_LEVELS: SeverityLevel[] = [
+  "faible",
+  "modere",
+  "eleve",
+  "critique",
+];
 
 export default function MapLegend() {
   return (
@@ -16,7 +21,9 @@ export default function MapLegend() {
       </div>
       {LEGEND_LEVELS.map((level) => (
         <div key={level} className="flex items-center gap-2 text-slate-600">
-          <span className={`h-3 w-3 rounded-full ${SEVERITY_BADGE_CLASSES[level]}`} />
+          <span
+            className={`h-3 w-3 rounded-full ${SEVERITY_BADGE_CLASSES[level]}`}
+          />
           {SEVERITY_LABELS[level]}
         </div>
       ))}

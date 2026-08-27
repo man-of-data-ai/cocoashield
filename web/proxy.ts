@@ -1,50 +1,82 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import {
+  areaForPath,
+  canAccess,
+  defaultPathForRole,
+} from "@/lib/access-control";
+import type { UserRole } from "@/types/user-profile";
+
 const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:3000";
-type Role = "administrateur" | "direction_ccc" | "agronome_terrain";
 
-function area(pathname: string): string | null {
-  if (/^\/parcels\/[^/]+\/analyses\/[^/]+/.test(pathname)) return "analysis";
-  if (pathname.startsWith("/parcels")) return "parcels";
-  if (pathname.startsWith("/map")) return "map";
-  if (pathname.startsWith("/comparaison")) return "comparison";
-  if (pathname.startsWith("/missions")) return "missions";
-  if (pathname.startsWith("/exports")) return "exports";
-  if (pathname.startsWith("/rapports")) return "reports";
-  if (pathname.startsWith("/configuration")) return "configuration";
-  if (pathname.startsWith("/utilisateurs")) return "users";
-  if (pathname.startsWith("/audit")) return "audit";
-  return null;
-}
-
-const permissions: Record<Role, string[]> = {
-  administrateur: ["parcels","map","comparison","missions","exports","reports","configuration","users","audit","analysis"],
-  direction_ccc: ["map","reports","audit","analysis"],
-  agronome_terrain: ["parcels","map","comparison","missions","analysis"],
-};
-
-function home(role: Role) { if (role === "agronome_terrain") return "/parcels"; if (role === "direction_ccc") return "/map"; return "/utilisateurs"; }
-
+/**
+ * Redirige la navigation des utilisateurs non connectés ou dont le rôle ne
+ * couvre pas la page demandée.
+ *
+ * Rôle exact de ce fichier : **confort de navigation**. Il évite d'afficher
+ * le squelette d'une page à laquelle l'utilisateur n'a pas droit avant que
+ * l'API ne renvoie 403.
+ *
+ * Ce n'est **pas** une frontière de sécurité. L'autorisation qui fait foi est
+ * appliquée côté serveur, endpoint par endpoint, par l'`AppRolesGuard` du
+ * backend (`back/src/modules/users/guards/app-roles.guard.ts`) : le proxy
+ * Next.js peut être contourné — CVE-2025-29927 l'a démontré en faisant sauter
+ * l'exécution du middleware via un simple en-tête forgé.
+ *
+ * La session est vérifiée en interrogeant directement le endpoint better-auth
+ * du backend (le cookie reçu est retransmis tel quel) plutôt qu'en revalidant
+ * un jeton localement : l'authentification réelle vit entièrement côté
+ * backend.
+ *
+ * Note : dans les versions récentes de Next.js, le fichier `middleware.ts` a
+ * été renommé `proxy.ts` (export `proxy` au lieu de `middleware`).
+ */
 export async function proxy(request: NextRequest) {
   const cookie = request.headers.get("cookie") ?? "";
-  const sessionResponse = await fetch(`${BACKEND_URL}/v1/auth/get-session`, { headers: { cookie }, cache: "no-store" });
+
+  const sessionResponse = await fetch(`${BACKEND_URL}/v1/auth/get-session`, {
+    headers: { cookie },
+    cache: "no-store",
+  });
   const session = sessionResponse.ok ? await sessionResponse.json() : null;
+
   if (!session) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("from", request.nextUrl.pathname);
     return NextResponse.redirect(loginUrl);
   }
 
-  const profileResponse = await fetch(`${BACKEND_URL}/v1/users/me/profile`, { headers: { cookie }, cache: "no-store" });
-  if (!profileResponse.ok) return NextResponse.redirect(new URL("/login", request.url));
-  const profile = await profileResponse.json() as { role: Role };
-  const requestedArea = area(request.nextUrl.pathname);
-  if (requestedArea && !permissions[profile.role]?.includes(requestedArea)) {
-    return NextResponse.redirect(new URL(home(profile.role), request.url));
+  const requestedArea = areaForPath(request.nextUrl.pathname);
+  if (!requestedArea) {
+    return NextResponse.next();
   }
+
+  const profileResponse = await fetch(`${BACKEND_URL}/v1/users/me/profile`, {
+    headers: { cookie },
+    cache: "no-store",
+  });
+  if (!profileResponse.ok) {
+    return NextResponse.redirect(new URL("/login", request.url));
+  }
+
+  const { role } = (await profileResponse.json()) as { role: UserRole };
+  if (!canAccess(role, requestedArea)) {
+    return NextResponse.redirect(new URL(defaultPathForRole(role), request.url));
+  }
+
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/parcels/:path*", "/map/:path*", "/comparaison/:path*", "/missions/:path*", "/exports/:path*", "/rapports/:path*", "/configuration/:path*", "/utilisateurs/:path*", "/audit/:path*"],
+  matcher: [
+    "/parcels/:path*",
+    "/map/:path*",
+    "/comparaison/:path*",
+    "/missions/:path*",
+    "/exports/:path*",
+    "/rapports/:path*",
+    "/configuration/:path*",
+    "/utilisateurs/:path*",
+    "/audit/:path*",
+  ],
 };

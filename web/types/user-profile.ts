@@ -10,6 +10,11 @@ export type AppUser = {
   cooperative: string | null;
   status: UserStatus;
   createdAt?: string;
+  /** Renseigné quand le compte a été supprimé (suppression réversible). */
+  deletedAt?: string | null;
 };
 
-export type CurrentUserProfile = Pick<AppUser, "role" | "cooperative" | "status">;
+export type CurrentUserProfile = Pick<
+  AppUser,
+  "role" | "cooperative" | "status"
+>;

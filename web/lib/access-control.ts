@@ -1,9 +1,40 @@
+/**
+ * Cartographie rôle → zones de l'application.
+ *
+ * Sert uniquement à l'expérience de navigation : masquer les entrées de menu
+ * et rediriger tôt. **Ce n'est pas un contrôle d'accès.** L'autorisation qui
+ * fait foi est appliquée côté serveur par l'`AppRolesGuard` du backend, sur
+ * chaque endpoint ; un client qui contournerait cette table n'obtiendrait
+ * aucune donnée supplémentaire.
+ */
+
 import type { UserRole } from "@/types/user-profile";
 
-export type AppArea = "parcels" | "map" | "comparison" | "missions" | "exports" | "reports" | "configuration" | "users" | "audit" | "analysis";
+export type AppArea =
+  | "parcels"
+  | "map"
+  | "comparison"
+  | "missions"
+  | "exports"
+  | "reports"
+  | "configuration"
+  | "users"
+  | "audit"
+  | "analysis";
 
 export const ROLE_AREAS: Record<UserRole, AppArea[]> = {
-  administrateur: ["parcels", "map", "comparison", "missions", "exports", "reports", "configuration", "users", "audit", "analysis"],
+  administrateur: [
+    "parcels",
+    "map",
+    "comparison",
+    "missions",
+    "exports",
+    "reports",
+    "configuration",
+    "users",
+    "audit",
+    "analysis",
+  ],
   direction_ccc: ["map", "reports", "audit", "analysis"],
   agronome_terrain: ["parcels", "map", "comparison", "missions", "analysis"],
 };

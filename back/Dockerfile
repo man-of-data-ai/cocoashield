@@ -6,6 +6,19 @@ RUN npm ci
 COPY . .
 RUN npm run build && npm prune --omit=dev
 
+# Développement : le code est monté en volume, seules les dépendances viennent
+# de l'image. L'entrypoint rejoue npm ci si le package-lock.json monté diffère.
+FROM node:22-slim AS development
+WORKDIR /app
+ENV NODE_ENV=development
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY docker-entrypoint.dev.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+EXPOSE 3000
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD ["npm", "run", "start:dev"]
+
 # Runtime — node:22-slim (glibc) requis par onnxruntime-node
 FROM node:22-slim
 WORKDIR /app
