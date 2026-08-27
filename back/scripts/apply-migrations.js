@@ -73,8 +73,38 @@ async function main() {
     }
   }
 
+  await assertAuthIdDefaults(client);
+
   console.log('Migrations up to date.');
   await client.end();
+}
+
+/**
+ * Les tables better-auth ne passent pas par TypeORM : rien ne valide leur
+ * schéma au démarrage. `advanced.database.generateId: 'uuid'` délègue la
+ * génération de l'id à PostgreSQL, et l'absence du DEFAULT correspondant ne se
+ * voit qu'à la première connexion, sous la forme d'un 500. Échouer ici, au
+ * démarrage du conteneur, plutôt que devant le premier utilisateur.
+ */
+async function assertAuthIdDefaults(client) {
+  const { rows } = await client.query(
+    `SELECT table_name FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND column_name = 'id'
+        AND table_name = ANY($1::text[])
+        AND column_default IS NULL
+      ORDER BY table_name`,
+    [['user', 'session', 'account', 'verification']],
+  );
+  if (rows.length > 0) {
+    const tables = rows.map((row) => row.table_name).join(', ');
+    throw new Error(
+      `Schema incomplet : ${tables} n'ont pas de DEFAULT sur "id". ` +
+        "better-auth est configure avec generateId: 'uuid', qui attend que la " +
+        'base genere l identifiant. Appliquer la migration ' +
+        '20260827_better_auth_id_defaults.sql.',
+    );
+  }
 }
 
 main().catch((error) => {

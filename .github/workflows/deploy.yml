@@ -104,3 +104,29 @@ jobs:
           scp -i ~/.ssh/deploy_key deploy/docker-compose.prod.yml deploy/Caddyfile "$VPS_USER@$VPS_HOST:/opt/cocoashield/"
           ssh -i ~/.ssh/deploy_key "$VPS_USER@$VPS_HOST" \
             "cd /opt/cocoashield && docker compose -f docker-compose.prod.yml pull && docker compose -f docker-compose.prod.yml up -d"
+
+      # `up -d` réussit dès que Docker a lancé les conteneurs, même si l'API
+      # redémarre en boucle derrière. Sans cette vérification, un déploiement
+      # peut être vert avec la production à terre.
+      - name: Verify the API answers
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          ssh -i ~/.ssh/deploy_key "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          cd /opt/cocoashield
+          DOMAIN=$(grep '^DOMAIN=' .env | cut -d= -f2)
+          for attempt in $(seq 1 24); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "https://$DOMAIN/v1/audit" || echo 000)
+            if [ "$code" = "401" ]; then
+              echo "API en ligne : /v1/audit répond 401 sans session, comme attendu."
+              exit 0
+            fi
+            echo "  tentative $attempt : $code"
+            sleep 5
+          done
+          echo "L'API ne répond pas correctement après 120s."
+          docker compose -f docker-compose.prod.yml ps
+          docker compose -f docker-compose.prod.yml logs --tail 40 back
+          exit 1
+          REMOTE
