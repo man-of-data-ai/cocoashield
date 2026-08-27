@@ -44,5 +44,9 @@ jobs:
           context: back
           push: true
           tags: ${{ steps.meta.outputs.tags }}
-          cache-from: type=gha,scope=back
-          cache-to: type=gha,mode=max,scope=back
+          provenance: false
+          # Cache sur GHCR plutôt que type=gha : le cache Actions n'est pas
+          # lisible depuis une branche sœur, donc le build de production ne
+          # retrouvait jamais celui chauffé par develop.
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository }}-back:buildcache
+          cache-to: type=registry,ref=ghcr.io/${{ github.repository }}-back:buildcache,mode=max,ignore-error=true
