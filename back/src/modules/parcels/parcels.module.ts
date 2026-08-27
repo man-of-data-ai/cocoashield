@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
-import { AuditModule } from '../audit/audit.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { AuditModule } from '../audit/audit.module';
 import { Parcel } from './entities/parcel.entity';
 import { ParcelsController } from './parcels.controller';
 import { ParcelsService } from './parcels.service';

@@ -4,18 +4,16 @@
 
 - Backend : `cd back && npm install && npm run start:dev`
 - Frontend : `cd web && npm install && npm run dev`
-- Pour charger le jeu de démonstration existant : `cd back && npm run seed:demo`
+- Pour charger le jeu de démonstration :
+  `cd back && SEED_DEMO_PASSWORD='<mot-de-passe-local>' npm run seed:demo`
 
-comptes:
+Le mot de passe des comptes de démonstration est choisi à l'exécution via
+`SEED_DEMO_PASSWORD` : il n'est pas versionné.
 
-Administrateur
-Email : admin@cocoashield.local
-Mot de passe : CocoaDemo2026!
+Comptes créés par le seed :
 
-Direction CCC
-Email : direction@ccc.ci
-Mot de passe : CocoaDemo2026!
-
-Agronome Terrain
-Email : agronome@cocoashield.local
-Mot de passe : CocoaDemo2026!
+| Rôle | Email |
+| --- | --- |
+| Administrateur | `admin@cocoashield.local` |
+| Direction CCC | `direction@ccc.ci` |
+| Agronome Terrain | `agronome@cocoashield.local` |

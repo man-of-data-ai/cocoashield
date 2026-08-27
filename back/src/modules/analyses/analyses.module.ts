@@ -6,8 +6,9 @@ import { diskStorage } from 'multer';
 import { randomUUID } from 'crypto';
 import { extname } from 'path';
 import * as fs from 'fs';
-import { ConfigModule } from '../../libs/infrastructure/config/config.module';
-import { ConfigService } from '../../libs/infrastructure/config/config.service';
+import { ConfigModule } from '../../core/config/config.module';
+import { ConfigService } from '../../core/config/services/config.service';
+import { AuditModule } from '../audit/audit.module';
 import { MissionsModule } from '../missions/missions.module';
 import { ParcelsModule } from '../parcels/parcels.module';
 import { PlatformConfigModule } from '../platform-config/platform-config.module';
@@ -29,6 +30,7 @@ import { AnalysisRepository } from './repositories/analysis.repository';
 @Module({
   imports: [
     TypeOrmModule.forFeature([Analysis, AnalysisImage]),
+    AuditModule,
     ParcelsModule,
     MissionsModule,
     PlatformConfigModule,

@@ -14,10 +14,17 @@ export class ParcelRepository {
     return this.repository.save(this.repository.create(data));
   }
 
+  /**
+   * Liste des parcelles avec leurs analyses, sans les images.
+   *
+   * Les images ne sont pas hydratées ici : la sévérité et le taux
+   * d'infection sont déjà calculés et stockés sur l'analyse, la liste n'a
+   * donc pas besoin de charger chaque ligne d'image.
+   */
   findByOwner(ownerId: string): Promise<Parcel[]> {
     return this.repository.find({
       where: { ownerId },
-      relations: { analyses: { images: true, mission: true } },
+      relations: { analyses: { mission: true } },
       order: {
         createdAt: 'DESC',
         analyses: { createdAt: 'DESC' },
@@ -37,6 +44,24 @@ export class ParcelRepository {
     await this.repository.update(id, { status });
   }
 
+  /**
+   * Recherche incluant les parcelles supprimées — réservé à la restauration.
+   */
+  findDeletedByIdAndOwner(id: string, ownerId: string): Promise<Parcel | null> {
+    return this.repository.findOne({
+      where: { id, ownerId },
+      withDeleted: true,
+    });
+  }
+
+  /** Soft delete : la parcelle et ses analyses restent en base. */
+  async softDelete(id: string): Promise<void> {
+    await this.repository.softDelete(id);
+  }
+
+  async restore(id: string): Promise<void> {
+    await this.repository.restore(id);
+  }
 
   async updateVerification(
     id: string,

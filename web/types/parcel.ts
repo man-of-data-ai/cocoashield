@@ -1,7 +1,7 @@
-
 export type ParcelStatus = "not_analyzed" | "analyzing" | "sick" | "healthy";
 
-export type TerrainVerificationStatus = "pending" | "verified" | "false_positive";
+export type TerrainVerificationStatus =
+  "pending" | "verified" | "false_positive";
 
 export type AnalysisStatus = "pending" | "processing" | "completed";
 

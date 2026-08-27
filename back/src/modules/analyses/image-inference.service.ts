@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as ort from 'onnxruntime-node';
 import sharp from 'sharp';
-import { ConfigService } from '../../libs/infrastructure/config/config.service';
+import { ConfigService } from '../../core/config/services/config.service';
 import { AnalysisResult } from './entities/analysis.entity';
 
 export interface ImageInferenceResult {

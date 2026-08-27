@@ -23,13 +23,16 @@ export const analysisService = {
   async createAnalysis(
     parcelId: string,
     images: File[],
-    context: CreateAnalysisContext = {}
+    context: CreateAnalysisContext = {},
   ): Promise<Analysis> {
     const formData = new FormData();
     for (const image of images) formData.append("images", image);
-    if (context.missionId?.trim()) formData.append("missionId", context.missionId.trim());
-    else if (context.missionName?.trim()) formData.append("missionName", context.missionName.trim());
-    if (context.profileId?.trim()) formData.append("profileId", context.profileId.trim());
+    if (context.missionId?.trim())
+      formData.append("missionId", context.missionId.trim());
+    else if (context.missionName?.trim())
+      formData.append("missionName", context.missionName.trim());
+    if (context.profileId?.trim())
+      formData.append("profileId", context.profileId.trim());
 
     return apiRequest<Analysis>(`/v1/parcels/${parcelId}/analyses`, {
       method: "POST",

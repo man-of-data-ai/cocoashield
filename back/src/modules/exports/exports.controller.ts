@@ -1,40 +1,56 @@
-import { Body, Controller, Get, Post, Req, Res } from '@nestjs/common';
-import type { Request } from 'express';
+import {
+  Body,
+  Controller,
+  Get,
+  Post,
+  Res,
+  UseInterceptors,
+} from '@nestjs/common';
+import { ApiOperation, ApiProduces, ApiTags } from '@nestjs/swagger';
 import { Session } from '@thallesp/nestjs-better-auth';
 import type { UserSession } from '@thallesp/nestjs-better-auth';
 import type { Response } from 'express';
-import { routes } from '../../routes';
+import { export_routes } from '../../routes';
+import { AuditInterceptor } from '../audit/audit.interceptor';
+import { Audit } from '../audit/decorators/audit.decorator';
+import { AppRoles } from '../users/decorators/app-roles.decorator';
+import { UserRole } from '../users/entities/user-profile.entity';
 import { CreateExportDto } from './dtos/create-export.dto';
 import { ExportsService } from './exports.service';
 
-@Controller(`${routes.version}${routes.exports.root}`)
+@ApiTags('Exports')
+@AppRoles(UserRole.ADMINISTRATEUR)
+@UseInterceptors(AuditInterceptor)
+@Controller()
 export class ExportsController {
   constructor(private readonly exportsService: ExportsService) {}
 
-  @Get()
+  @Get(export_routes.root)
+  @ApiOperation({ summary: 'Historique des exports générés' })
   list(@Session() session: UserSession) {
     return this.exportsService.list(session.user.id);
   }
 
-  @Post(routes.exports.generate)
+  @Post(export_routes.generate)
+  @Audit({ action: 'export.generated', targetType: 'export' })
+  @ApiOperation({ summary: 'Générer une archive d’export' })
+  @ApiProduces('application/zip')
   async generate(
     @Session() session: UserSession,
     @Body() dto: CreateExportDto,
-    @Req() request: Request,
     @Res() response: Response,
-  ) {
-    const file = await this.exportsService.generate(
+  ): Promise<void> {
+    const { filename, archive } = await this.exportsService.generate(
       session.user.id,
       session.user.email ?? null,
       dto,
-      request.ip ?? null,
     );
-    response.setHeader('Content-Type', file.contentType);
+
+    response.setHeader('Content-Type', 'application/zip');
     response.setHeader(
       'Content-Disposition',
-      `attachment; filename="${file.filename}"`,
+      `attachment; filename="${filename}"`,
     );
-    response.setHeader('Content-Length', file.buffer.length);
-    response.send(file.buffer);
+    archive.pipe(response);
   }
 }

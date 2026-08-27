@@ -1,12 +1,16 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { AuditActor, AuditService } from '../audit/audit.service';
 import { CreateDroneProfileDto } from './dtos/create-drone-profile.dto';
 import { UpdateDroneProfileDto } from './dtos/update-drone-profile.dto';
 import { UpdatePlatformSettingsDto } from './dtos/update-platform-settings.dto';
 import { DroneProfile } from './entities/drone-profile.entity';
 import { PlatformSettings } from './entities/platform-settings.entity';
+import { SeverityThresholds } from './severity';
 
 const DEFAULT_SETTINGS = {
   severityModerate: 0.1,
@@ -14,7 +18,7 @@ const DEFAULT_SETTINGS = {
   severityCritical: 0.4,
   clusteringRadiusM: 20,
   minImagesPerZone: 5,
-};
+} as const;
 
 @Injectable()
 export class PlatformConfigService {
@@ -23,95 +27,149 @@ export class PlatformConfigService {
     private readonly settingsRepository: Repository<PlatformSettings>,
     @InjectRepository(DroneProfile)
     private readonly droneRepository: Repository<DroneProfile>,
-    private readonly auditService: AuditService,
   ) {}
 
+  /**
+   * Lecture des réglages. Une absence de ligne renvoie les valeurs par
+   * défaut sans écrire : une lecture ne doit pas créer d'état, et deux
+   * requêtes concurrentes violeraient la contrainte d'unicité.
+   */
   async getSettings(ownerId: string): Promise<PlatformSettings> {
-    let settings = await this.settingsRepository.findOne({ where: { ownerId } });
-    if (!settings) {
-      settings = this.settingsRepository.create({ ownerId, ...DEFAULT_SETTINGS });
-      settings = await this.settingsRepository.save(settings);
-    }
-    return settings;
+    const settings = await this.settingsRepository.findOne({
+      where: { ownerId },
+    });
+    return (
+      settings ??
+      this.settingsRepository.create({ ownerId, ...DEFAULT_SETTINGS })
+    );
   }
 
-  async updateSettings(ownerId: string, dto: UpdatePlatformSettingsDto, actor?: AuditActor): Promise<PlatformSettings> {
-    if (!(dto.severityModerate < dto.severityHigh && dto.severityHigh < dto.severityCritical)) {
-      throw new BadRequestException('Severity thresholds must be strictly increasing');
-    }
+  /** Seuils de sévérité applicables à un propriétaire, en taux (0 → 1). */
+  async getSeverityThresholds(ownerId: string): Promise<SeverityThresholds> {
     const settings = await this.getSettings(ownerId);
-    const before = {
-      severityModerate: settings.severityModerate,
-      severityHigh: settings.severityHigh,
-      severityCritical: settings.severityCritical,
-      clusteringRadiusM: settings.clusteringRadiusM,
-      minImagesPerZone: settings.minImagesPerZone,
+    return {
+      moderate: settings.severityModerate,
+      high: settings.severityHigh,
+      critical: settings.severityCritical,
     };
-    Object.assign(settings, dto);
-    const saved = await this.settingsRepository.save(settings);
-    if (actor) {
-      await this.auditService.log({
-        ...actor,
-        action: 'configuration.settings.updated',
-        targetType: 'configuration',
-        targetId: saved.id,
-        targetLabel: 'Seuils de sévérité et clustering',
-        details: { before, after: dto },
-      });
-    }
-    return saved;
   }
 
-  listDroneProfiles(ownerId: string, activeOnly = false): Promise<DroneProfile[]> {
+  async updateSettings(
+    ownerId: string,
+    dto: UpdatePlatformSettingsDto,
+  ): Promise<PlatformSettings> {
+    if (!(
+      dto.severityModerate < dto.severityHigh &&
+      dto.severityHigh < dto.severityCritical
+    )) {
+      throw new BadRequestException(
+        'Les seuils de sévérité doivent être strictement croissants.',
+      );
+    }
+
+    const settings = await this.getSettings(ownerId);
+    Object.assign(settings, dto);
+    return this.settingsRepository.save(settings);
+  }
+
+  listDroneProfiles(
+    ownerId: string,
+    activeOnly = false,
+  ): Promise<DroneProfile[]> {
     return this.droneRepository.find({
       where: activeOnly ? { ownerId, active: true } : { ownerId },
       order: { manufacturer: 'ASC', model: 'ASC' },
     });
   }
 
-  async getActiveDroneProfile(ownerId: string, profileId: string): Promise<DroneProfile> {
-    const profile = await this.droneRepository.findOne({ where: { ownerId, profileId, active: true } });
-    if (!profile) throw new BadRequestException(`Unknown or inactive profile_id: ${profileId}`);
+  async getActiveDroneProfile(
+    ownerId: string,
+    profileId: string,
+  ): Promise<DroneProfile> {
+    const profile = await this.droneRepository.findOne({
+      where: { ownerId, profileId, active: true },
+    });
+    if (!profile) {
+      throw new BadRequestException(
+        `Profil drone inconnu ou inactif : ${profileId}`,
+      );
+    }
     return profile;
   }
 
-  async createDroneProfile(ownerId: string, dto: CreateDroneProfileDto, actor?: AuditActor): Promise<DroneProfile> {
-    const existing = await this.droneRepository.findOne({ where: { ownerId, profileId: dto.profileId } });
-    if (existing) throw new BadRequestException('profile_id already exists');
-    const saved = await this.droneRepository.save(this.droneRepository.create({ ownerId, ...dto, active: dto.active ?? true }));
-    if (actor) {
-      await this.auditService.log({
-        ...actor,
-        action: 'drone_profile.created',
-        targetType: 'drone_profile',
-        targetId: saved.id,
-        targetLabel: `${saved.manufacturer} ${saved.model} (${saved.profileId})`,
-        details: { profileId: saved.profileId, active: saved.active, metadataFormat: saved.metadataFormat },
-      });
+  async createDroneProfile(
+    ownerId: string,
+    dto: CreateDroneProfileDto,
+  ): Promise<DroneProfile> {
+    const existing = await this.droneRepository.findOne({
+      where: { ownerId, profileId: dto.profileId },
+    });
+    if (existing) {
+      throw new BadRequestException('Ce profil drone existe déjà.');
     }
-    return saved;
+    return this.droneRepository.save(
+      this.droneRepository.create({
+        ownerId,
+        ...dto,
+        active: dto.active ?? true,
+      }),
+    );
   }
 
-  async updateDroneProfile(ownerId: string, id: string, dto: UpdateDroneProfileDto, actor?: AuditActor): Promise<DroneProfile> {
-    const profile = await this.droneRepository.findOne({ where: { id, ownerId } });
-    if (!profile) throw new NotFoundException('Drone profile not found');
+  async updateDroneProfile(
+    ownerId: string,
+    id: string,
+    dto: UpdateDroneProfileDto,
+  ): Promise<DroneProfile> {
+    const profile = await this.droneRepository.findOne({
+      where: { id, ownerId },
+    });
+    if (!profile) {
+      throw new NotFoundException('Profil drone introuvable.');
+    }
     if (dto.profileId && dto.profileId !== profile.profileId) {
-      const duplicate = await this.droneRepository.findOne({ where: { ownerId, profileId: dto.profileId } });
-      if (duplicate) throw new BadRequestException('profile_id already exists');
-    }
-    const before = { profileId: profile.profileId, active: profile.active, manufacturer: profile.manufacturer, model: profile.model };
-    Object.assign(profile, dto);
-    const saved = await this.droneRepository.save(profile);
-    if (actor) {
-      await this.auditService.log({
-        ...actor,
-        action: saved.active ? 'drone_profile.updated' : 'drone_profile.deactivated',
-        targetType: 'drone_profile',
-        targetId: saved.id,
-        targetLabel: `${saved.manufacturer} ${saved.model} (${saved.profileId})`,
-        details: { before, after: dto },
+      const duplicate = await this.droneRepository.findOne({
+        where: { ownerId, profileId: dto.profileId },
       });
+      if (duplicate) {
+        throw new BadRequestException('Ce profil drone existe déjà.');
+      }
     }
-    return saved;
+    Object.assign(profile, dto);
+    return this.droneRepository.save(profile);
+  }
+
+  /**
+   * Suppression réversible d'un profil drone. Les analyses conservent leur
+   * `profile_id` : elles documentent le matériel réellement utilisé, y
+   * compris pour un profil retiré du catalogue.
+   */
+  async softDeleteDroneProfile(ownerId: string, id: string): Promise<void> {
+    const profile = await this.droneRepository.findOne({
+      where: { id, ownerId },
+    });
+    if (!profile) {
+      throw new NotFoundException('Profil drone introuvable.');
+    }
+    await this.droneRepository.softDelete(id);
+  }
+
+  async restoreDroneProfile(
+    ownerId: string,
+    id: string,
+  ): Promise<DroneProfile> {
+    const profile = await this.droneRepository.findOne({
+      where: { id, ownerId },
+      withDeleted: true,
+    });
+    if (!profile) {
+      throw new NotFoundException('Profil drone introuvable.');
+    }
+    if (!profile.deletedAt) {
+      throw new BadRequestException("Ce profil drone n'est pas supprimé.");
+    }
+    await this.droneRepository.restore(id);
+    profile.deletedAt = null;
+    return profile;
   }
 }

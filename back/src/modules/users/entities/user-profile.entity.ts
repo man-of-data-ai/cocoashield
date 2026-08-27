@@ -14,7 +14,7 @@ export enum UserStatus {
 
 @Entity('app_user_profile')
 export class UserProfile extends RestEntity {
-  @Index({ unique: true })
+  @Index({ unique: true, where: 'deleted_at IS NULL' })
   @Column({ name: 'user_id' })
   userId: string;
 

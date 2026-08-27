@@ -2,7 +2,12 @@ import { Column, Entity, Index } from 'typeorm';
 import { RestEntity } from '../../../libs/infrastructure/persistence/entities/rest.entity';
 
 @Entity('drone_profile')
-@Index(['ownerId', 'profileId'], { unique: true })
+// L'unicité ne porte que sur les lignes vivantes : un profil supprimé ne
+// doit pas empêcher de recréer le même `profile_id`.
+@Index(['ownerId', 'profileId'], {
+  unique: true,
+  where: 'deleted_at IS NULL',
+})
 export class DroneProfile extends RestEntity {
   @Column({ name: 'owner_id' })
   ownerId: string;

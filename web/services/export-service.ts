@@ -1,5 +1,11 @@
 import { ApiError, apiRequest } from "@/lib/api-client";
-import type { AuditFacets, AuditFilters, AuditLog, CreateExportInput, ExportRecord } from "@/types/export";
+import type {
+  AuditFacets,
+  AuditFilters,
+  AuditPage,
+  CreateExportInput,
+  ExportRecord,
+} from "@/types/export";
 
 function filenameFromDisposition(value: string | null): string | null {
   if (!value) return null;
@@ -12,13 +18,13 @@ export const exportService = {
     return apiRequest<ExportRecord[]>("/v1/exports");
   },
 
-  listAudit(filters: AuditFilters = {}): Promise<AuditLog[]> {
+  listAudit(filters: AuditFilters = {}): Promise<AuditPage> {
     const params = new URLSearchParams();
     for (const [key, value] of Object.entries(filters)) {
-      if (value) params.set(key, value);
+      if (value !== undefined && value !== "") params.set(key, String(value));
     }
     const query = params.toString();
-    return apiRequest<AuditLog[]>(`/v1/audit${query ? `?${query}` : ""}`);
+    return apiRequest<AuditPage>(`/v1/audit${query ? `?${query}` : ""}`);
   },
 
   listAuditFacets(): Promise<AuditFacets> {
@@ -35,17 +41,20 @@ export const exportService = {
     if (!response.ok) {
       let message = `Erreur inattendue (${response.status}).`;
       try {
-        const payload = (await response.json()) as { message?: string | string[] };
+        const payload = (await response.json()) as {
+          message?: string | string[];
+        };
         if (Array.isArray(payload.message)) message = payload.message.join(" ");
         else if (payload.message) message = payload.message;
       } catch {
+        // La réponse d'erreur n'est pas du JSON : le message générique suffit.
       }
       throw new ApiError(message, response.status);
     }
     const blob = await response.blob();
     const filename =
       filenameFromDisposition(response.headers.get("Content-Disposition")) ??
-      "cocoashield-export";
+      "cocoashield-export.zip";
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;

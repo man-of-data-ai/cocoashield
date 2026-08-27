@@ -1,4 +1,3 @@
-
 import { apiRequest } from "@/lib/api-client";
 import type { Parcel, TerrainVerificationStatus } from "@/types/parcel";
 
@@ -19,7 +18,7 @@ export const parcelService = {
   async updateVerification(
     id: string,
     status: TerrainVerificationStatus,
-    comment?: string
+    comment?: string,
   ): Promise<Parcel> {
     return apiRequest<Parcel>(`/v1/parcels/${id}/verification`, {
       method: "PATCH",

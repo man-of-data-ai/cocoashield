@@ -1,16 +1,24 @@
-import { IsOptional, IsString, MinLength } from 'class-validator';
+import {
+  IsISO8601,
+  IsOptional,
+  IsString,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
 
 export class CreateMissionDto {
   @IsString()
   @MinLength(1)
+  @MaxLength(200)
   name: string;
 
-  /** ISO date string; falls back to "now" if omitted. */
+  /** Date ISO ; par défaut, la date du jour. */
   @IsOptional()
-  @IsString()
+  @IsISO8601()
   missionDate?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(4000)
   notes?: string;
 }

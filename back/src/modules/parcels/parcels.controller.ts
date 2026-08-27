@@ -1,41 +1,75 @@
-import { Body, Controller, Get, Param, Patch, Post, Req } from '@nestjs/common';
-import type { Request } from 'express';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  UseInterceptors,
+} from '@nestjs/common';
+import {
+  ApiCreatedResponse,
+  ApiNoContentResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
 import { Session } from '@thallesp/nestjs-better-auth';
 import type { UserSession } from '@thallesp/nestjs-better-auth';
-import { routes } from '../../routes';
+import { parcel_routes } from '../../routes';
+import { AuditInterceptor } from '../audit/audit.interceptor';
+import { Audit } from '../audit/decorators/audit.decorator';
+import { AppRoles } from '../users/decorators/app-roles.decorator';
+import { UserRole } from '../users/entities/user-profile.entity';
 import { CreateParcelDto } from './dtos/create-parcel.dto';
 import { UpdateParcelVerificationDto } from './dtos/update-parcel-verification.dto';
 import { ParcelsService } from './parcels.service';
 
-@Controller(`${routes.version}${routes.parcels.root}`)
+@ApiTags('Parcelles')
+@AppRoles(UserRole.ADMINISTRATEUR, UserRole.AGRONOME_TERRAIN)
+@UseInterceptors(AuditInterceptor)
+@Controller()
 export class ParcelsController {
   constructor(private readonly parcelsService: ParcelsService) {}
 
-  @Post()
-  create(@Session() session: UserSession, @Req() request: Request, @Body() dto: CreateParcelDto) {
-    return this.parcelsService.create(session.user.id, dto, {
-      userId: session.user.id, userEmail: session.user.email ?? null, ipAddress: request.ip ?? null,
-    });
+  @Post(parcel_routes.root)
+  @Audit({ action: 'parcel.created', targetType: 'parcel' })
+  @ApiOperation({ summary: 'Créer une parcelle' })
+  @ApiCreatedResponse({ description: 'Parcelle créée.' })
+  create(@Session() session: UserSession, @Body() dto: CreateParcelDto) {
+    return this.parcelsService.create(session.user.id, dto);
   }
 
-  @Get()
+  @Get(parcel_routes.root)
+  @ApiOperation({ summary: "Lister les parcelles de l'utilisateur" })
   findAll(@Session() session: UserSession) {
     return this.parcelsService.findAllForOwner(session.user.id);
   }
 
-  @Get(routes.parcels.byId)
-  findOne(@Session() session: UserSession, @Req() request: Request, @Param('id') id: string) {
-    return this.parcelsService.findOneForOwner(id, session.user.id, {
-      userId: session.user.id, userEmail: session.user.email ?? null, ipAddress: request.ip ?? null,
-    });
+  @Get(parcel_routes.details)
+  @ApiOperation({ summary: 'Détail d’une parcelle' })
+  @ApiOkResponse({ description: 'Parcelle, analyses et images associées.' })
+  findOne(
+    @Session() session: UserSession,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.parcelsService.findOneForOwner(id, session.user.id);
   }
 
-
-  @Patch(routes.parcels.verification)
+  @Patch(parcel_routes.verification)
+  @Audit({
+    action: 'parcel.verification.updated',
+    targetType: 'parcel',
+    targetIdParam: 'id',
+  })
+  @ApiOperation({ summary: 'Mettre à jour la vérification terrain' })
   updateVerification(
     @Session() session: UserSession,
-    @Param('id') id: string,
-    @Req() request: Request,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateParcelVerificationDto,
   ) {
     return this.parcelsService.updateVerification(
@@ -43,7 +77,41 @@ export class ParcelsController {
       session.user.id,
       dto.status,
       dto.comment,
-      { userId: session.user.id, userEmail: session.user.email ?? null, ipAddress: request.ip ?? null },
     );
+  }
+
+  @Delete(parcel_routes.details)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Audit({
+    action: 'parcel.deleted',
+    targetType: 'parcel',
+    targetIdParam: 'id',
+  })
+  @ApiOperation({
+    summary: 'Supprimer une parcelle (réversible)',
+    description:
+      'Suppression logique : la parcelle disparaît des listes mais reste en base, ' +
+      'avec ses analyses. Restaurable via POST /:id/restore.',
+  })
+  @ApiNoContentResponse({ description: 'Parcelle supprimée.' })
+  remove(
+    @Session() session: UserSession,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.parcelsService.softDelete(id, session.user.id);
+  }
+
+  @Post(parcel_routes.restore)
+  @Audit({
+    action: 'parcel.restored',
+    targetType: 'parcel',
+    targetIdParam: 'id',
+  })
+  @ApiOperation({ summary: 'Restaurer une parcelle supprimée' })
+  restore(
+    @Session() session: UserSession,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.parcelsService.restore(id, session.user.id);
   }
 }

@@ -36,10 +36,13 @@ import {
   ExportScope,
 } from '../src/modules/exports/entities/export-record.entity';
 import { AuditLog } from '../src/modules/audit/entities/audit-log.entity';
+import { classifySeverity } from '../src/modules/platform-config/severity';
 
-// Surchargez SEED_DEMO_PASSWORD hors développement local : le défaut est
-// public (repo open) et ne doit jamais protéger un environnement réel.
-const DEMO_PASSWORD = process.env.SEED_DEMO_PASSWORD ?? 'CocoaDemo2026!';
+/**
+ * Le mot de passe de démonstration n'est pas versionné : il est fourni par
+ * l'environnement. Un secret commité est un secret compromis.
+ */
+const DEMO_PASSWORD = process.env.SEED_DEMO_PASSWORD ?? '';
 const DEMO_USERS = [
   {
     email: 'admin@cocoashield.local',
@@ -245,14 +248,11 @@ async function seedOwner(
     const [originLng, originLat] = spec.parcel.boundary.coordinates[0][0];
     const total = spec.infected + spec.healthy;
     const infectionPercentage = total > 0 ? (spec.infected / total) * 100 : 0;
-    const severityLevel =
-      infectionPercentage >= 40
-        ? 'critique'
-        : infectionPercentage >= 25
-          ? 'eleve'
-          : infectionPercentage >= 10
-            ? 'modere'
-            : 'faible';
+    const severityLevel = classifySeverity(infectionPercentage / 100, {
+      moderate: 0.1,
+      high: 0.25,
+      critical: 0.4,
+    });
     const completedAt =
       spec.status === AnalysisStatus.COMPLETED
         ? new Date(createdAt.getTime() + 45 * 60000)
@@ -405,7 +405,35 @@ async function seedOwner(
   ]);
 }
 
+/**
+ * Le seed supprime les données existantes du propriétaire avant de les
+ * réinsérer. Il refuse donc de s'exécuter ailleurs qu'en développement local,
+ * pour qu'un `DATABASE_URL` mal pointé ne détruise pas un environnement
+ * partagé.
+ */
+function assertSafeEnvironment(): void {
+  if (!DEMO_PASSWORD) {
+    throw new Error(
+      'SEED_DEMO_PASSWORD doit être défini pour exécuter le seed de démonstration.',
+    );
+  }
+  const nodeEnv = process.env.NODE_ENV ?? 'development';
+  if (nodeEnv !== 'development') {
+    throw new Error(
+      `Seed refusé : NODE_ENV vaut "${nodeEnv}", ce script est réservé au développement local.`,
+    );
+  }
+  const host = process.env.DATABASE_HOST ?? 'localhost';
+  if (!['localhost', '127.0.0.1', 'db', 'postgres'].includes(host)) {
+    throw new Error(
+      `Seed refusé : la base cible (${host}) n'est pas locale. Ce script efface des données.`,
+    );
+  }
+}
+
 async function main() {
+  assertSafeEnvironment();
+
   const app = await NestFactory.createApplicationContext(AppModule, {
     logger: ['error', 'warn'],
   });
@@ -417,6 +445,7 @@ async function main() {
   for (let index = 0; index < DEMO_USERS.length; index += 1) {
     const spec = DEMO_USERS[index];
     const user = await ensureUser(auth, dataSource, spec.email, spec.username);
+    await usersService.createProfile(user.id);
     await usersService.update(user.id, {
       role: spec.role,
       cooperative: spec.cooperative,

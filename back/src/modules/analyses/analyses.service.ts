@@ -6,11 +6,12 @@ import {
 } from '@nestjs/common';
 import { Queue } from 'bullmq';
 import * as path from 'path';
-import { ConfigService } from '../../libs/infrastructure/config/config.service';
+import { ConfigService } from '../../core/config/services/config.service';
 import { MissionsService } from '../missions/missions.service';
 import { ParcelStatus } from '../parcels/entities/parcel.entity';
 import { ParcelsService } from '../parcels/parcels.service';
 import { PlatformConfigService } from '../platform-config/platform-config.service';
+import { classifySeverity } from '../platform-config/severity';
 import { IMAGE_INFERENCE_QUEUE, ImageInferenceJob } from './analyses.constants';
 import { AnalysisImageMeta } from './dtos/create-analysis.dto';
 import {
@@ -177,7 +178,28 @@ export class AnalysesService {
     };
   }
 
-  /** Called by the ImageInferenceProcessor after each image is processed. */
+  /**
+   * Suppression réversible d'une analyse. Les images restent sur le disque et
+   * en base : ce sont les pièces justificatives de l'analyse.
+   */
+  async softDelete(id: string, ownerId: string): Promise<void> {
+    await this.findOneForOwner(id, ownerId);
+    await this.analysisRepository.softDelete(id);
+  }
+
+  async restore(id: string, ownerId: string): Promise<Analysis> {
+    const analysis = await this.analysisRepository.findDeletedById(id);
+    if (!analysis || analysis.parcel.ownerId !== ownerId) {
+      throw new NotFoundException('Analyse introuvable.');
+    }
+    if (!analysis.deletedAt) {
+      throw new BadRequestException("Cette analyse n'est pas supprimée.");
+    }
+    await this.analysisRepository.restore(id);
+    return this.findOneForOwner(id, ownerId);
+  }
+
+  /** Appelé par l'ImageInferenceProcessor après le traitement de chaque image. */
   async finalizeIfDone(analysisId: string): Promise<void> {
     const analysis = await this.findOne(analysisId);
 
@@ -195,24 +217,26 @@ export class AnalysesService {
     const infected = processed.filter(
       (image: AnalysisImage) => image.result === AnalysisResult.INFECTED,
     );
-    const infectionPercentage =
-      processed.length > 0 ? (infected.length / processed.length) * 100 : 0;
-    const severityLevel: 'faible' | 'modere' | 'eleve' | 'critique' =
-      infectionPercentage >= 40
-        ? 'critique'
-        : infectionPercentage >= 25
-          ? 'eleve'
-          : infectionPercentage >= 10
-            ? 'modere'
-            : 'faible';
+
+    const infectionRate =
+      processed.length > 0 ? infected.length / processed.length : 0;
+
+    // Les seuils viennent de la configuration de la plateforme, jamais de
+    // constantes en dur : l'écran de configuration doit avoir un effet réel.
+    const thresholds = await this.platformConfigService.getSeverityThresholds(
+      analysis.parcel.ownerId,
+    );
+    const severityLevel = classifySeverity(infectionRate, thresholds);
+
     const affectedZones = infected
       .filter((image) => image.latitude !== null && image.longitude !== null)
       .map((image) => ({
         latitude: image.latitude!,
         longitude: image.longitude!,
-        severity: Math.max(0.15, Math.min(1, infectionPercentage / 100)),
-        severityLevel: severityLevel,
+        severity: Math.max(0.15, Math.min(1, infectionRate)),
+        severityLevel,
       }));
+
     const isInfected = infected.length > 0;
     const completedAt = new Date();
 
@@ -220,7 +244,7 @@ export class AnalysesService {
       status: AnalysisStatus.COMPLETED,
       result: isInfected ? AnalysisResult.INFECTED : AnalysisResult.HEALTHY,
       completedAt,
-      infectionPercentage,
+      infectionPercentage: infectionRate * 100,
       severityLevel,
       affectedZones,
       reportGeneratedAt: completedAt,

@@ -2,7 +2,7 @@ import { Column, Entity, Index } from 'typeorm';
 import { RestEntity } from '../../../libs/infrastructure/persistence/entities/rest.entity';
 
 @Entity('platform_settings')
-@Index(['ownerId'], { unique: true })
+@Index(['ownerId'], { unique: true, where: 'deleted_at IS NULL' })
 export class PlatformSettings extends RestEntity {
   @Column({ name: 'owner_id' })
   ownerId: string;

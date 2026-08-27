@@ -9,7 +9,10 @@ type SeverityBadgeProps = {
   className?: string;
 };
 
-export default function SeverityBadge({ level, className = "" }: SeverityBadgeProps) {
+export default function SeverityBadge({
+  level,
+  className = "",
+}: SeverityBadgeProps) {
   if (level === "inconnu") return null;
   return (
     <span

@@ -1,0 +1,21 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Éditeurs
+.idea/
+.vscode/
+*.swp
+
+# Dépendances et sorties de build
+node_modules/
+dist/
+.next/
+*.tsbuildinfo
+
+# Environnement
+.env
+.env.local
+
+# Logs
+*.log

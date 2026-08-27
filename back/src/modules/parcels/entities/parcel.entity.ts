@@ -43,7 +43,6 @@ export class Parcel extends RestEntity {
   })
   status: ParcelStatus;
 
-
   @Column({
     name: 'terrain_verification_status',
     type: 'enum',
@@ -52,7 +51,11 @@ export class Parcel extends RestEntity {
   })
   terrainVerificationStatus: TerrainVerificationStatus;
 
-  @Column({ name: 'terrain_verification_comment', type: 'text', nullable: true })
+  @Column({
+    name: 'terrain_verification_comment',
+    type: 'text',
+    nullable: true,
+  })
   terrainVerificationComment: string | null;
 
   @Column({ name: 'terrain_verified_at', type: 'timestamptz', nullable: true })
@@ -60,6 +63,4 @@ export class Parcel extends RestEntity {
 
   @OneToMany(() => Analysis, (analysis) => analysis.parcel)
   analyses: Analysis[];
-
-
 }
