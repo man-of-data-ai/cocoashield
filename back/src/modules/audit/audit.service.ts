@@ -1,124 +1,72 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { ForbiddenException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import {
-  Between,
-  FindOptionsWhere,
-  ILike,
-  LessThanOrEqual,
-  MoreThanOrEqual,
-  Repository,
-} from 'typeorm';
-import { ListAuditDto } from './dtos/list-audit.dto';
+import { Between, FindOptionsWhere, ILike, In, LessThanOrEqual, MoreThanOrEqual, Repository } from 'typeorm';
+import { UsersService } from '../users/users.service';
+import { UserRole } from '../users/entities/user-profile.entity';
 import { AuditLog } from './entities/audit-log.entity';
 
-export type AuditEvent = {
-  userId: string;
-  userEmail?: string | null;
-  ipAddress?: string | null;
-  action: string;
-  targetType?: string | null;
-  targetId?: string | null;
-  targetLabel?: string | null;
-  details?: Record<string, unknown> | null;
-};
-
-export type AuditPage = {
-  items: AuditLog[];
-  total: number;
-  limit: number;
-  offset: number;
-};
-
-const DEFAULT_LIMIT = 50;
-const MAX_LIMIT = 200;
+export type AuditActor = { userId: string; userEmail?: string | null; ipAddress?: string | null };
+export type AuditEvent = AuditActor & { action: string; targetType?: string | null; targetId?: string | null; targetLabel?: string | null; details?: Record<string, unknown> | null };
+export type AuditFilters = { user?: string; action?: string; dateFrom?: string; dateTo?: string; target?: string };
 
 @Injectable()
 export class AuditService {
-  private readonly logger = new Logger(AuditService.name);
-
   constructor(
-    @InjectRepository(AuditLog)
-    private readonly repository: Repository<AuditLog>,
+    @InjectRepository(AuditLog) private readonly repository: Repository<AuditLog>,
+    private readonly usersService: UsersService,
   ) {}
 
-  /**
-   * Enregistre un évènement. Appelé par l'`AuditInterceptor`.
-   *
-   * L'échec est journalisé mais jamais propagé : une panne du registre
-   * d'audit ne doit pas faire échouer une opération métier déjà validée.
-   */
-  async log(event: AuditEvent): Promise<void> {
-    try {
-      await this.repository.save(
-        this.repository.create({
-          userId: event.userId,
-          userEmail: event.userEmail ?? null,
-          action: event.action,
-          targetType: event.targetType ?? null,
-          targetId: event.targetId ?? null,
-          targetLabel: event.targetLabel ?? null,
-          ipAddress: event.ipAddress ?? null,
-          details: event.details ?? null,
-        }),
-      );
-    } catch (error) {
-      this.logger.error(
-        `Écriture du journal d'audit impossible (${event.action})`,
-        error instanceof Error ? error.stack : undefined,
-      );
-    }
+  async log(event: AuditEvent): Promise<AuditLog> {
+    return this.repository.save(this.repository.create({
+      userId: event.userId,
+      userEmail: event.userEmail ?? null,
+      action: event.action,
+      targetType: event.targetType ?? null,
+      targetId: event.targetId ?? null,
+      targetLabel: event.targetLabel ?? null,
+      ipAddress: event.ipAddress ?? null,
+      details: event.details ?? null,
+    }));
   }
 
-  async list(filters: ListAuditDto): Promise<AuditPage> {
-    const where: FindOptionsWhere<AuditLog> = {};
-
+  async listForActor(actorId: string, filters: AuditFilters): Promise<AuditLog[]> {
+    const scope = await this.usersService.getAccessScope(actorId);
+    if (![UserRole.ADMINISTRATEUR, UserRole.DIRECTION_CCC].includes(scope.role)) throw new ForbiddenException('Audit access is not allowed for this role');
+    const visibleIds = await this.usersService.visibleUserIdsForActor(actorId);
+    if (!visibleIds.length) return [];
+    const where: FindOptionsWhere<AuditLog> = { userId: In(visibleIds) };
     if (filters.user) {
-      // Le sélecteur du front envoie un email ; un identifiant reste accepté.
       if (filters.user.includes('@')) where.userEmail = filters.user;
-      else where.userId = filters.user;
+      else if (visibleIds.includes(filters.user)) where.userId = filters.user;
+      else return [];
     }
     if (filters.action) where.action = filters.action;
-    if (filters.target?.trim()) {
-      where.targetLabel = ILike(`%${filters.target.trim()}%`);
-    }
-
-    const from = filters.dateFrom ? new Date(filters.dateFrom) : null;
-    const to = filters.dateTo ? new Date(filters.dateTo) : null;
+    if (filters.target?.trim()) where.targetLabel = ILike(`%${filters.target.trim()}%`);
+    const from = filters.dateFrom ? new Date(`${filters.dateFrom}T00:00:00.000Z`) : null;
+    const to = filters.dateTo ? new Date(`${filters.dateTo}T23:59:59.999Z`) : null;
     if (from && to) where.createdAt = Between(from, to);
     else if (from) where.createdAt = MoreThanOrEqual(from);
     else if (to) where.createdAt = LessThanOrEqual(to);
-
-    const limit = Math.min(filters.limit ?? DEFAULT_LIMIT, MAX_LIMIT);
-    const offset = filters.offset ?? 0;
-
-    const [items, total] = await this.repository.findAndCount({
-      where,
-      order: { createdAt: 'DESC' },
-      take: limit,
-      skip: offset,
-    });
-
-    return { items, total, limit, offset };
+    return this.repository.find({ where, order: { createdAt: 'DESC' }, take: 500 });
   }
 
-  /** Valeurs distinctes proposées comme filtres dans l'interface. */
-  async facets(): Promise<{ users: string[]; actions: string[] }> {
-    const [userRows, actionRows] = await Promise.all([
-      this.repository
-        .createQueryBuilder('audit')
+  async facetsForActor(actorId: string): Promise<{ users: string[]; actions: string[] }> {
+    const scope = await this.usersService.getAccessScope(actorId);
+    if (![UserRole.ADMINISTRATEUR, UserRole.DIRECTION_CCC].includes(scope.role)) throw new ForbiddenException('Audit access is not allowed for this role');
+    const visibleIds = await this.usersService.visibleUserIdsForActor(actorId);
+    if (!visibleIds.length) return { users: [], actions: [] };
+    const [usersRows, actionRows] = await Promise.all([
+      this.repository.createQueryBuilder('audit')
         .select('DISTINCT COALESCE(audit.user_email, audit.user_id)', 'value')
+        .where('audit.user_id IN (:...visibleIds)', { visibleIds })
         .orderBy('value', 'ASC')
         .getRawMany<{ value: string }>(),
-      this.repository
-        .createQueryBuilder('audit')
+      this.repository.createQueryBuilder('audit')
         .select('DISTINCT audit.action', 'value')
+        .where('audit.user_id IN (:...visibleIds)', { visibleIds })
         .orderBy('value', 'ASC')
         .getRawMany<{ value: string }>(),
     ]);
-
-    return {
-      users: userRows.map((row) => row.value).filter(Boolean),
-      actions: actionRows.map((row) => row.value).filter(Boolean),
-    };
+    return { users: usersRows.map((row) => row.value).filter(Boolean), actions: actionRows.map((row) => row.value).filter(Boolean) };
   }
 }

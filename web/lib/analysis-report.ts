@@ -1,6 +1,5 @@
 import { computeParcelMetrics } from "@/lib/geo";
 import { riskZonesFromAnalysis } from "@/lib/risk-zones";
-import type { SeverityThresholds } from "@/lib/severity";
 import { SEVERITY_LABELS, type Severity } from "@/lib/severity";
 import type { Analysis } from "@/types/parcel";
 
@@ -36,131 +35,61 @@ export type AnalysisReportData = {
   recommendations: string[];
 };
 
-function percentageFor(
-  analysis: Analysis,
-  processedImages: number,
-  infectedImages: number,
-): number {
-  if (typeof analysis.infectionPercentage === "number")
-    return analysis.infectionPercentage;
+function percentageFor(analysis: Analysis, processedImages: number, infectedImages: number): number {
+  if (typeof analysis.infectionPercentage === "number") return analysis.infectionPercentage;
   return processedImages > 0 ? (infectedImages / processedImages) * 100 : 0;
 }
 
-function recommendationsFor(
-  severity: Severity | null,
-  locatedZones: number,
-): string[] {
+function recommendationsFor(severity: Severity | null, locatedZones: number): string[] {
   const recommendations: string[] = [];
   if (severity === "critique") {
-    recommendations.push(
-      "Prioriser une vérification terrain des zones critiques et planifier une intervention rapide.",
-    );
+    recommendations.push("Prioriser une vérification terrain des zones critiques et planifier une intervention rapide.");
   } else if (severity === "eleve") {
-    recommendations.push(
-      "Programmer une vérification terrain rapprochée des zones à sévérité élevée.",
-    );
+    recommendations.push("Programmer une vérification terrain rapprochée des zones à sévérité élevée.");
   } else if (severity === "modere") {
-    recommendations.push(
-      "Maintenir une surveillance renforcée lors du prochain passage terrain.",
-    );
+    recommendations.push("Maintenir une surveillance renforcée lors du prochain passage terrain.");
   } else if (severity === "faible") {
-    recommendations.push(
-      "Poursuivre le suivi régulier afin de détecter rapidement toute évolution.",
-    );
+    recommendations.push("Poursuivre le suivi régulier afin de détecter rapidement toute évolution.");
   }
   if (locatedZones > 0) {
-    recommendations.push(
-      "Utiliser les coordonnées des zones à risque pour cibler les observations et contrôles sur le terrain.",
-    );
+    recommendations.push("Utiliser les coordonnées des zones à risque pour cibler les observations et contrôles sur le terrain.");
   }
-  recommendations.push(
-    "Comparer cette analyse au prochain passage afin de mesurer l’évolution des zones affectées.",
-  );
+  recommendations.push("Comparer cette analyse au prochain passage afin de mesurer l’évolution des zones affectées.");
   return recommendations;
 }
 
-export function buildAnalysisReport(
-  analysis: Analysis,
-  thresholds: SeverityThresholds,
-): AnalysisReportData {
-  const processed = analysis.images.filter(
-    (image) => image.status === "processed" && image.result !== null,
-  );
-  const healthy = processed.filter(
-    (image) => image.result === "healthy",
-  ).length;
-  const infected = processed.filter(
-    (image) => image.result === "infected",
-  ).length;
-  const failed = analysis.images.filter(
-    (image) => image.status === "failed",
-  ).length;
-  const precise = analysis.images.filter(
-    (image) => image.geolocationQuality === "precise",
-  ).length;
+export function buildAnalysisReport(analysis: Analysis): AnalysisReportData {
+  const processed = analysis.images.filter((image) => image.status === "processed" && image.result !== null);
+  const healthy = processed.filter((image) => image.result === "healthy").length;
+  const infected = processed.filter((image) => image.result === "infected").length;
+  const failed = analysis.images.filter((image) => image.status === "failed").length;
+  const precise = analysis.images.filter((image) => ["rtk_fix","precise"].includes(image.geolocationQuality)).length;
   const locatedInfected = analysis.images.filter(
-    (image) =>
-      image.status === "processed" &&
-      image.result === "infected" &&
-      image.latitude !== null &&
-      image.longitude !== null &&
-      image.geolocationQuality !== "none",
+    (image) => image.status === "processed" && image.result === "infected" && image.latitude !== null && image.longitude !== null && image.geolocationQuality !== "none"
   ).length;
-  const infectionPercentage = percentageFor(
-    analysis,
-    processed.length,
-    infected,
-  );
+  const infectionPercentage = percentageFor(analysis, processed.length, infected);
   const severity = analysis.severityLevel;
-  const zones = analysis.parcel
-    ? riskZonesFromAnalysis(analysis.parcel, analysis, thresholds)
-    : [];
+  const zones = analysis.parcel ? riskZonesFromAnalysis(analysis.parcel, analysis) : [];
   const geometryZoneAreas = zones
     .map((zone) => zone.surfaceSquareMeters)
-    .filter(
-      (value): value is number =>
-        typeof value === "number" && Number.isFinite(value) && value >= 0,
-    );
-  const affectedAreaSquareMeters =
-    geometryZoneAreas.length > 0
-      ? geometryZoneAreas.reduce((sum, value) => sum + value, 0)
-      : null;
-  const parcelAreaSquareMeters = analysis.parcel
-    ? computeParcelMetrics(analysis.parcel.boundary).areaSquareMeters
-    : null;
+    .filter((value): value is number => typeof value === "number" && Number.isFinite(value) && value >= 0);
+  const affectedAreaSquareMeters = geometryZoneAreas.length > 0 ? geometryZoneAreas.reduce((sum, value) => sum + value, 0) : null;
+  const parcelAreaSquareMeters = analysis.parcel ? computeParcelMetrics(analysis.parcel.boundary).areaSquareMeters : null;
 
   const insights: string[] = [];
-  if (processed.length > 0)
-    insights.push(
-      `${infected} image${infected > 1 ? "s" : ""} infectée${infected > 1 ? "s" : ""} sur ${processed.length} image${processed.length > 1 ? "s" : ""} traitée${processed.length > 1 ? "s" : ""}.`,
-    );
-  else
-    insights.push("Aucune image traitée n’est disponible pour cette analyse.");
-  if (zones.length > 0)
-    insights.push(
-      `${zones.length} zone${zones.length > 1 ? "s" : ""} à risque géolocalisée${zones.length > 1 ? "s" : ""} dans la parcelle.`,
-    );
-  else
-    insights.push(
-      "Aucune zone à risque géolocalisée n’est disponible dans les données de cette analyse.",
-    );
-  if (affectedAreaSquareMeters !== null)
-    insights.push(
-      `La surface cumulée des zones disposant d’une géométrie est estimée à ${(affectedAreaSquareMeters / 10_000).toLocaleString("fr-FR", { maximumFractionDigits: 2 })} ha.`,
-    );
-  if (precise < analysis.images.length && analysis.images.length > 0)
-    insights.push(
-      `${precise} image${precise > 1 ? "s" : ""} sur ${analysis.images.length} dispose${precise > 1 ? "nt" : ""} d’une géolocalisation précise.`,
-    );
+  if (processed.length > 0) insights.push(`${infected} image${infected > 1 ? "s" : ""} infectée${infected > 1 ? "s" : ""} sur ${processed.length} image${processed.length > 1 ? "s" : ""} traitée${processed.length > 1 ? "s" : ""}.`);
+  else insights.push("Aucune image traitée n’est disponible pour cette analyse.");
+  if (zones.length > 0) insights.push(`${zones.length} zone${zones.length > 1 ? "s" : ""} à risque géolocalisée${zones.length > 1 ? "s" : ""} dans la parcelle.`);
+  else insights.push("Aucune zone à risque géolocalisée n’est disponible dans les données de cette analyse.");
+  if (affectedAreaSquareMeters !== null) insights.push(`La surface cumulée des zones disposant d’une géométrie est estimée à ${(affectedAreaSquareMeters / 10_000).toLocaleString("fr-FR", { maximumFractionDigits: 2 })} ha.`);
+  if (precise < analysis.images.length && analysis.images.length > 0) insights.push(`${precise} image${precise > 1 ? "s" : ""} sur ${analysis.images.length} dispose${precise > 1 ? "nt" : ""} d’une géolocalisation précise.`);
 
   return {
     analysisId: analysis.id,
     parcelName: analysis.parcel?.name ?? "Parcelle",
     missionName: analysis.mission?.name ?? "Sans mission associée",
     analysisDate: new Date(analysis.completedAt ?? analysis.createdAt),
-    reportDate: new Date(
-      analysis.reportGeneratedAt ?? analysis.completedAt ?? analysis.createdAt,
-    ),
+    reportDate: new Date(analysis.reportGeneratedAt ?? analysis.completedAt ?? analysis.createdAt),
     infectionPercentage,
     severity,
     severityLabel: severity ? SEVERITY_LABELS[severity] : "En attente",

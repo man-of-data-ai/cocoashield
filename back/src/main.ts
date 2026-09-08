@@ -1,8 +1,7 @@
-import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
-import { ConfigService } from './core/config/services/config.service';
+import { ConfigService } from './libs/infrastructure/config/config.service';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -11,35 +10,9 @@ async function bootstrap() {
     bodyParser: false,
   });
 
-  app.useGlobalPipes(
-    new ValidationPipe({
-      // `whitelist` retire les champs non déclarés dans le DTO ;
-      // `forbidNonWhitelisted` refuse explicitement la requête au lieu de les
-      // ignorer en silence (protection contre la sur-affectation).
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-    }),
-  );
+  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
 
   const config = app.get(ConfigService);
-  app.enableCors({ origin: config.webUrl, credentials: true });
-
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle('CocoaShield API')
-    .setDescription(
-      'API de suivi phytosanitaire des parcelles de cacao. ' +
-        'L’authentification se fait par cookie de session better-auth.',
-    )
-    .setVersion('1.0')
-    .addCookieAuth('better-auth.session_token')
-    .build();
-  SwaggerModule.setup(
-    'docs',
-    app,
-    SwaggerModule.createDocument(app, swaggerConfig),
-  );
-
   await app.listen(config.port);
 }
 void bootstrap();

@@ -1,5 +1,6 @@
 "use client";
 
+
 import { useState, type FormEvent } from "react";
 
 import Alert from "@/components/ui/Alert";
@@ -115,11 +116,7 @@ export default function RegisterForm({
         disabled={isSubmitting}
         className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#244B32] px-4 py-3 font-semibold text-white transition hover:bg-[#356A46] hover:shadow-[0_10px_24px_rgba(36,75,50,0.14)] disabled:cursor-not-allowed disabled:bg-slate-300"
       >
-        {isSubmitting ? (
-          <Spinner label="Création du compte..." />
-        ) : (
-          "S'inscrire"
-        )}
+        {isSubmitting ? <Spinner label="Création du compte..." /> : "S'inscrire"}
       </button>
     </form>
   );

@@ -1,5 +1,6 @@
 "use client";
 
+
 import { useState, type FormEvent } from "react";
 
 import Alert from "@/components/ui/Alert";
@@ -28,10 +29,7 @@ export default function LoginForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       <div>
-        <label
-          htmlFor="email"
-          className="block text-sm font-semibold text-slate-900"
-        >
+        <label htmlFor="email" className="block text-sm font-semibold text-slate-900">
           Adresse e-mail
         </label>
         <input

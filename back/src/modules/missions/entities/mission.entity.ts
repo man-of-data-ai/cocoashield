@@ -14,12 +14,21 @@ export class Mission extends RestEntity {
   @Column({ name: 'owner_id' })
   ownerId: string;
 
+  @Index()
+  @Column({ name: 'organization_id', type: 'varchar', nullable: true })
+  organizationId: string | null;
+
   @Column()
   name: string;
 
-  /** Date de la mission (par défaut, date de création si non fournie). */
-  @Column({ name: 'mission_date', type: 'timestamptz', nullable: true })
-  missionDate: Date | null;
+  @Column({ name: 'mission_date', type: 'timestamptz' })
+  missionDate: Date;
+
+  @Column({ name: 'drone_profile_id', type: 'varchar', nullable: true })
+  droneProfileId: string | null;
+
+  @Column({ name: 'parcel_ids', type: 'jsonb', default: () => "'[]'::jsonb" })
+  parcelIds: string[];
 
   @Column({ type: 'text', nullable: true })
   notes: string | null;

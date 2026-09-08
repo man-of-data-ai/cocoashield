@@ -1,3 +1,4 @@
+
 import { EARTH_RADIUS_METERS } from "@/lib/constants";
 import type { ParcelBoundary, ParcelMetrics } from "@/types/parcel";
 
@@ -9,7 +10,8 @@ function toRadians(degrees: number): number {
 }
 
 function projectRingToMeters(ring: Ring): PlanarPoint[] {
-  const meanLat = ring.reduce((sum, [, lat]) => sum + lat, 0) / ring.length;
+  const meanLat =
+    ring.reduce((sum, [, lat]) => sum + lat, 0) / ring.length;
   const cosMeanLat = Math.cos(toRadians(meanLat));
 
   return ring.map(([lng, lat]) => ({
@@ -51,7 +53,7 @@ function ringCentroid(ring: Ring): { lat: number; long: number } {
       lng: acc.lng + lng,
       lat: acc.lat + lat,
     }),
-    { lng: 0, lat: 0 },
+    { lng: 0, lat: 0 }
   );
 
   return {

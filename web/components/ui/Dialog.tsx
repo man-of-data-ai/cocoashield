@@ -1,5 +1,6 @@
 "use client";
 
+
 type DialogProps = {
   open: boolean;
   onClose: () => void;
@@ -8,22 +9,14 @@ type DialogProps = {
   maxWidthClassName?: string;
 };
 
-export default function Dialog({
-  open,
-  onClose,
-  title,
-  children,
-  maxWidthClassName = "max-w-2xl",
-}: DialogProps) {
+export default function Dialog({ open, onClose, title, children, maxWidthClassName = "max-w-2xl" }: DialogProps) {
   if (!open) {
     return null;
   }
 
   return (
     <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-slate-900/40 px-4">
-      <div
-        className={`max-h-[90vh] w-full ${maxWidthClassName} overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-xl`}
-      >
+      <div className={`max-h-[90vh] w-full ${maxWidthClassName} overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-xl`}>
         <div className="mb-5 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
           <button

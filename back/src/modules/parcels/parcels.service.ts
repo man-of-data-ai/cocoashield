@@ -1,45 +1,87 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Parcel, ParcelStatus, TerrainVerificationStatus } from './entities/parcel.entity';
 import { CreateParcelDto } from './dtos/create-parcel.dto';
-import {
-  Parcel,
-  ParcelStatus,
-  TerrainVerificationStatus,
-} from './entities/parcel.entity';
 import { ParcelRepository } from './repositories/parcel.repository';
+import { AuditActor, AuditService } from '../audit/audit.service';
+import { UsersService } from '../users/users.service';
+import { UserRole } from '../users/entities/user-profile.entity';
 
 @Injectable()
 export class ParcelsService {
-  constructor(private readonly parcelRepository: ParcelRepository) {}
+  constructor(
+    private readonly parcelRepository: ParcelRepository,
+    private readonly auditService: AuditService,
+    private readonly usersService: UsersService,
+  ) {}
 
-  create(ownerId: string, dto: CreateParcelDto): Promise<Parcel> {
-    return this.parcelRepository.create({
+  async create(ownerId: string, dto: CreateParcelDto, actor?: AuditActor): Promise<Parcel> {
+    const ring = this.closeRing(dto.coordinates);
+    const scope = await this.usersService.getAccessScope(ownerId);
+    const organizationId = scope.isPlatformAdmin
+      ? scope.primaryOrganizationId
+      : scope.organizationIds[0] ?? scope.primaryOrganizationId;
+
+    if (!scope.isPlatformAdmin && !organizationId) {
+      throw new BadRequestException('Votre compte doit être rattaché à une organisation pour créer une parcelle.');
+    }
+
+    const parcel = await this.parcelRepository.create({
       ownerId,
+      organizationId: organizationId ?? null,
       name: dto.name,
-      boundary: {
-        type: 'Polygon',
-        coordinates: [this.closeRing(dto.coordinates)],
-      },
+      producerName: dto.producerName?.trim() || null,
+      producerEmail: dto.producerEmail?.trim() || null,
+      producerPhone: dto.producerPhone?.trim() || null,
+      boundary: { type: 'Polygon', coordinates: [ring] },
       status: ParcelStatus.NOT_ANALYZED,
     });
+    if (actor) {
+      await this.auditService.log({ ...actor, action: 'parcel.created', targetType: 'parcel', targetId: parcel.id, targetLabel: parcel.name, details: { coordinateCount: ring.length, organizationId: parcel.organizationId } });
+    }
+    return parcel;
   }
 
-  findAllForOwner(ownerId: string): Promise<Parcel[]> {
-    return this.parcelRepository.findByOwner(ownerId);
+  async findAllForOwner(ownerId: string): Promise<Parcel[]> {
+    const scope = await this.usersService.getAccessScope(ownerId);
+    if (scope.role === UserRole.DIRECTION_CCC && !scope.isPlatformAdmin) {
+      throw new ForbiddenException('La Direction dispose uniquement de la vue agrégée et ne peut pas consulter les parcelles nominatives.');
+    }
+    return this.parcelRepository.findAccessible(ownerId, scope.organizationIds, scope.isPlatformAdmin);
   }
 
-  /**
-   * Charge une parcelle en vérifiant qu'elle appartient bien à l'appelant.
-   * Le propriétaire est porté par la requête : aucun filtrage en mémoire
-   * après chargement, sans quoi une parcelle tierce transiterait déjà.
-   */
-  async findOneForOwner(id: string, ownerId: string): Promise<Parcel> {
-    const parcel = await this.parcelRepository.findByIdAndOwner(id, ownerId);
-    if (!parcel) {
-      throw new NotFoundException('Parcelle introuvable.');
+  async summaryForOwner(ownerId: string) {
+    const scope = await this.usersService.getAccessScope(ownerId);
+    const parcels = await this.parcelRepository.findAccessible(ownerId, scope.organizationIds, scope.isPlatformAdmin);
+    const analyses = parcels.flatMap((parcel) => parcel.analyses ?? []);
+    const completed = analyses.filter((analysis) => String(analysis.status) === 'completed');
+    const infected = completed.filter((analysis) => String(analysis.result) === 'infected');
+    const latestByParcel = parcels.map((parcel) => parcel.analyses?.[0]).filter(Boolean);
+    const zones = latestByParcel.flatMap((analysis: any) => analysis?.affectedZones ?? []);
+    const affectedSurfaceSquareMeters = zones.reduce((sum: number, zone: any) => sum + Number(zone.surfaceSquareMeters ?? 0), 0);
+    const criticalZones = zones.filter((zone: any) => zone.severityLevel === 'critique').length;
+    const activeZones = zones.filter((zone: any) => (zone.zoneStatus ?? 'active') !== 'regression').length;
+    const averageInfectionPercentage = completed.length ? completed.reduce((sum, analysis) => sum + Number(analysis.infectionPercentage ?? 0), 0) / completed.length : 0;
+    return {
+      parcelCount: parcels.length,
+      analyzedParcelCount: parcels.filter((parcel) => (parcel.analyses?.length ?? 0) > 0).length,
+      analysisCount: analyses.length,
+      completedAnalysisCount: completed.length,
+      infectedAnalysisCount: infected.length,
+      averageInfectionPercentage,
+      activeZones,
+      criticalZones,
+      affectedSurfaceSquareMeters,
+      generatedAt: new Date().toISOString(),
+    };
+  }
+
+  async findOneForOwner(id: string, ownerId: string, actor?: AuditActor): Promise<Parcel> {
+    const scope = await this.usersService.getAccessScope(ownerId);
+    if (scope.role === UserRole.DIRECTION_CCC && !scope.isPlatformAdmin) throw new ForbiddenException('La Direction ne peut pas consulter une parcelle nominative.');
+    const parcel = await this.parcelRepository.findByIdAccessible(id, ownerId, scope.organizationIds, scope.isPlatformAdmin);
+    if (!parcel) throw new NotFoundException('Parcel not found');
+    if (actor) {
+      await this.auditService.log({ ...actor, action: 'parcel.consulted', targetType: 'parcel', targetId: parcel.id, targetLabel: parcel.name, details: { status: parcel.status, organizationId: parcel.organizationId } });
     }
     return parcel;
   }
@@ -48,47 +90,29 @@ export class ParcelsService {
     return this.parcelRepository.updateStatus(id, status);
   }
 
-  async updateVerification(
-    id: string,
-    ownerId: string,
-    status: TerrainVerificationStatus,
-    comment?: string,
-  ): Promise<Parcel> {
+  async updateVerification(id: string, ownerId: string, status: TerrainVerificationStatus, comment?: string, actor?: AuditActor): Promise<Parcel> {
+    const scope = await this.usersService.getAccessScope(ownerId);
+    if (![UserRole.ADMINISTRATEUR, UserRole.AGRONOME_TERRAIN].includes(scope.role)) {
+      throw new BadRequestException('Seul un agronome ou un administrateur peut valider un diagnostic terrain.');
+    }
     await this.findOneForOwner(id, ownerId);
-
     await this.parcelRepository.updateVerification(id, {
       terrainVerificationStatus: status,
       terrainVerificationComment: comment?.trim() || null,
-      terrainVerifiedAt:
-        status === TerrainVerificationStatus.PENDING ? null : new Date(),
+      terrainVerifiedAt: status === TerrainVerificationStatus.PENDING ? null : new Date(),
     });
-
-    return this.findOneForOwner(id, ownerId);
-  }
-
-  /**
-   * Suppression réversible. Les analyses rattachées restent en base : elles
-   * portent l'historique sanitaire, qui doit survivre au retrait d'une
-   * parcelle de l'interface.
-   */
-  async softDelete(id: string, ownerId: string): Promise<void> {
-    await this.findOneForOwner(id, ownerId);
-    await this.parcelRepository.softDelete(id);
-  }
-
-  async restore(id: string, ownerId: string): Promise<Parcel> {
-    const parcel = await this.parcelRepository.findDeletedByIdAndOwner(
-      id,
-      ownerId,
-    );
-    if (!parcel) {
-      throw new NotFoundException('Parcelle introuvable.');
+    const parcel = await this.findOneForOwner(id, ownerId);
+    if (actor) {
+      await this.auditService.log({
+        ...actor,
+        action: status === TerrainVerificationStatus.VERIFIED ? 'parcel.verified' : status === TerrainVerificationStatus.FALSE_POSITIVE ? 'parcel.false_positive' : 'parcel.verification.reset',
+        targetType: 'parcel',
+        targetId: parcel.id,
+        targetLabel: parcel.name,
+        details: { verificationStatus: status, comment: comment?.trim() || null, organizationId: parcel.organizationId },
+      });
     }
-    if (!parcel.deletedAt) {
-      throw new BadRequestException("Cette parcelle n'est pas supprimée.");
-    }
-    await this.parcelRepository.restore(id);
-    return this.findOneForOwner(id, ownerId);
+    return parcel;
   }
 
   private closeRing(points: [number, number][]): number[][] {

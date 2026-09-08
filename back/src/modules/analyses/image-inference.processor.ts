@@ -2,7 +2,7 @@ import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import * as path from 'path';
-import { ConfigService } from '../../core/config/services/config.service';
+import { ConfigService } from '../../libs/infrastructure/config/config.service';
 import { AnalysesService } from './analyses.service';
 import { IMAGE_INFERENCE_QUEUE, ImageInferenceJob } from './analyses.constants';
 import { AnalysisImageStatus } from './entities/analysis-image.entity';
@@ -34,14 +34,13 @@ export class ImageInferenceProcessor extends WorkerHost {
 
     try {
       const filePath = path.join(this.configService.uploadsDir, image.filePath);
-      const { result, confidence, modelVersion } =
+      const { result, confidence } =
         await this.imageInferenceService.classify(filePath);
 
       await this.analysisImageRepository.update(image.id, {
         status: AnalysisImageStatus.PROCESSED,
         result,
         confidence,
-        modelVersion,
       });
     } catch (error) {
       this.logger.error(

@@ -21,6 +21,6 @@ declare module "leaflet" {
 
   function heatLayer(
     latlngs: HeatLatLngTuple[],
-    options?: HeatLayerOptions,
+    options?: HeatLayerOptions
   ): HeatLayer;
 }

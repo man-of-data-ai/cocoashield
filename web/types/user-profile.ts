@@ -1,4 +1,4 @@
-export type UserRole = "administrateur" | "direction_ccc" | "agronome_terrain";
+export type UserRole = "administrateur" | "direction_ccc" | "agronome_terrain" | "operateur_terrain";
 export type UserStatus = "active" | "inactive";
 
 export type AppUser = {
@@ -8,13 +8,24 @@ export type AppUser = {
   username?: string | null;
   role: UserRole;
   cooperative: string | null;
+  organizationId: string | null;
+  organizationOffer?: "saas_ponctuel" | "saas_annuel" | "saas_byod" | "on_premise" | null;
   status: UserStatus;
+  isPlatformAdmin: boolean;
+  managedOrganizationIds: string[];
   createdAt?: string;
-  /** Renseigné quand le compte a été supprimé (suppression réversible). */
-  deletedAt?: string | null;
 };
 
-export type CurrentUserProfile = Pick<
-  AppUser,
-  "role" | "cooperative" | "status"
->;
+export type CurrentUserProfile = {
+  id?: string;
+  name?: string;
+  email?: string;
+  username?: string | null;
+  role: UserRole;
+  cooperative: string | null;
+  organizationId: string | null;
+  organizationOffer?: "saas_ponctuel" | "saas_annuel" | "saas_byod" | "on_premise" | null;
+  status: UserStatus;
+  isPlatformAdmin: boolean;
+  managedOrganizationIds: string[];
+};

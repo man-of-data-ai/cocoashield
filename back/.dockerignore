@@ -1,12 +1,6 @@
 node_modules
 dist
-uploads
-.env
-.env.*
-!.env.example
-better-auth_migrations
-test
-*.md
 coverage
-*.log
 .git
+.env
+uploads

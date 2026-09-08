@@ -4,8 +4,10 @@ import { Analysis } from './analysis.entity';
 import { AnalysisResult } from './analysis-result.enum';
 
 export enum AnalysisImageSource {
+  DRONE = 'drone',
+  ROBOT = 'robot',
   MOBILE = 'mobile',
-  UPLOAD = 'upload',
+  UPLOAD = 'upload', // compatibilité des anciens imports web ; le profileId précise le vecteur réel
 }
 
 export enum AnalysisImageStatus {
@@ -21,6 +23,10 @@ export enum AnalysisImageStatus {
  * - NONE : aucune coordonnée géographique fiable disponible.
  */
 export enum GeolocationQuality {
+  RTK_FIX = 'rtk_fix',
+  RTK_FLOAT = 'rtk_float',
+  GNSS_ONLY = 'gnss_seul',
+  MANUAL = 'saisie_manuelle',
   PRECISE = 'precise',
   APPROXIMATE = 'approximate',
   NONE = 'none',
@@ -61,12 +67,6 @@ export class AnalysisImage extends RestEntity {
   @Column({ type: 'float', nullable: true })
   confidence: number | null;
 
-  // Version du modèle ayant produit le résultat (inférence serveur).
-  // Null pour les images pré-classifiées côté mobile tant que l'app
-  // ne remonte pas cette information.
-  @Column({ name: 'model_version', type: 'varchar', nullable: true })
-  modelVersion: string | null;
-
   @Column({ type: 'float', nullable: true })
   latitude: number | null;
 
@@ -80,4 +80,22 @@ export class AnalysisImage extends RestEntity {
     default: GeolocationQuality.NONE,
   })
   geolocationQuality: GeolocationQuality;
+
+  @Column({ name: 'altitude_m', type: 'float', nullable: true })
+  altitudeM: number | null;
+
+  @Column({ name: 'gimbal_yaw', type: 'float', nullable: true })
+  gimbalYaw: number | null;
+
+  @Column({ name: 'gimbal_pitch', type: 'float', nullable: true })
+  gimbalPitch: number | null;
+
+  @Column({ name: 'gimbal_roll', type: 'float', nullable: true })
+  gimbalRoll: number | null;
+
+  @Column({ name: 'capture_timestamp', type: 'timestamptz', nullable: true })
+  captureTimestamp: Date | null;
+
+  @Column({ name: 'geolocation_precision_m', type: 'float', nullable: true })
+  geolocationPrecisionM: number | null;
 }

@@ -5,12 +5,7 @@ import { useMemo, useState } from "react";
 import { Database, Search } from "lucide-react";
 
 import { computeParcelMetrics, formatArea } from "@/lib/geo";
-import {
-  computeParcelSeverity,
-  SEVERITY_BADGE_CLASSES,
-  SEVERITY_LABELS,
-} from "@/lib/severity";
-import { useSeverityThresholds } from "@/context/SeverityThresholdsContext";
+import { computeParcelSeverity, SEVERITY_BADGE_CLASSES, SEVERITY_LABELS } from "@/lib/severity";
 import type { Parcel } from "@/types/parcel";
 
 type ParcelsTableProps = {
@@ -20,16 +15,14 @@ type ParcelsTableProps = {
 
 function missionsCountFor(parcel: Parcel): number {
   const missionIds = new Set(
-    (parcel.analyses ?? [])
-      .map((analysis) => analysis.missionId)
-      .filter(Boolean),
+    (parcel.analyses ?? []).map((analysis) => analysis.missionId).filter(Boolean)
   );
   return missionIds.size > 0 ? missionIds.size : (parcel.analyses ?? []).length;
 }
 
 function latestActivityFor(parcel: Parcel): string {
   const dates = (parcel.analyses ?? []).map((analysis) =>
-    new Date(analysis.createdAt).getTime(),
+    new Date(analysis.createdAt).getTime()
   );
   if (dates.length === 0) return "—";
   const mostRecent = Math.max(...dates);
@@ -40,19 +33,13 @@ function latestActivityFor(parcel: Parcel): string {
   });
 }
 
-export default function ParcelsTable({
-  parcels,
-  onCreateClick,
-}: ParcelsTableProps) {
-  const { thresholds } = useSeverityThresholds();
+export default function ParcelsTable({ parcels, onCreateClick }: ParcelsTableProps) {
   const [search, setSearch] = useState("");
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
     if (!query) return parcels;
-    return parcels.filter((parcel) =>
-      parcel.name.toLowerCase().includes(query),
-    );
+    return parcels.filter((parcel) => parcel.name.toLowerCase().includes(query));
   }, [parcels, search]);
 
   return (
@@ -63,9 +50,7 @@ export default function ParcelsTable({
             <Database className="h-4 w-4 text-[#244B32]" />
           </div>
           <div>
-            <h2 className="text-sm font-bold text-slate-900">
-              Vue d&rsquo;ensemble
-            </h2>
+            <h2 className="text-sm font-bold text-slate-900">Vue d&rsquo;ensemble</h2>
             <p className="text-xs text-slate-400">
               Recherchez une parcelle et consultez son état.
             </p>
@@ -116,9 +101,9 @@ export default function ParcelsTable({
             </thead>
             <tbody>
               {filtered.map((parcel) => {
-                const severity = computeParcelSeverity(parcel, thresholds);
+                const severity = computeParcelSeverity(parcel);
                 const areaLabel = formatArea(
-                  computeParcelMetrics(parcel.boundary).areaSquareMeters,
+                  computeParcelMetrics(parcel.boundary).areaSquareMeters
                 );
 
                 return (
@@ -136,15 +121,11 @@ export default function ParcelsTable({
                     </td>
                     <td className="px-5 py-3.5 text-slate-600">{areaLabel}</td>
                     <td className="px-5 py-3.5">
-                      {severity.level === "inconnu" ? (
-                        <span className="text-slate-400">—</span>
-                      ) : (
-                        <span
-                          className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold text-white ${SEVERITY_BADGE_CLASSES[severity.level]}`}
-                        >
-                          {SEVERITY_LABELS[severity.level]}
-                        </span>
-                      )}
+                      {severity.level === "inconnu" ? <span className="text-slate-400">—</span> : <span
+                        className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold text-white ${SEVERITY_BADGE_CLASSES[severity.level]}`}
+                      >
+                        {SEVERITY_LABELS[severity.level]}
+                      </span>}
                     </td>
                     <td className="px-5 py-3.5">
                       <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-slate-100 px-2 text-xs font-semibold text-slate-600">
@@ -156,12 +137,7 @@ export default function ParcelsTable({
                     </td>
                     <td className="px-5 py-3.5">
                       <div className="flex flex-wrap gap-2">
-                        <Link
-                          href={`/parcels/${parcel.id}`}
-                          className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-[#244B32] hover:text-[#244B32]"
-                        >
-                          Consulter
-                        </Link>
+                        <Link href={`/parcels/${parcel.id}`} className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-[#244B32] hover:text-[#244B32]">Consulter</Link>
                       </div>
                     </td>
                   </tr>

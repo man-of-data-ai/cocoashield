@@ -5,7 +5,7 @@ import {
   IsDateString,
   IsEnum,
   IsOptional,
-  IsUUID,
+  IsString,
 } from 'class-validator';
 import { ExportFormat, ExportScope } from '../entities/export-record.entity';
 
@@ -19,7 +19,7 @@ export class CreateExportDto {
   formats: ExportFormat[];
 
   @IsOptional()
-  @IsUUID()
+  @IsString()
   scopeId?: string;
 
   @IsOptional()
