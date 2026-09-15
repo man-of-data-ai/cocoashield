@@ -6,6 +6,10 @@
 
 CREATE EXTENSION IF NOT EXISTS postgis;
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+-- gen_random_uuid() est native depuis PostgreSQL 13, mais 20260827 et
+-- 20260905 s'en servent : l'extension rend la chaîne indépendante de la
+-- version du serveur au lieu de dépendre d'un implicite.
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 -- Tables Better Auth
 create table "user" ("id" text not null primary key, "name" text not null, "email" text not null unique, "emailVerified" boolean not null, "image" text, "createdAt" timestamptz default CURRENT_TIMESTAMP not null, "updatedAt" timestamptz default CURRENT_TIMESTAMP not null, "username" text unique, "displayUsername" text);

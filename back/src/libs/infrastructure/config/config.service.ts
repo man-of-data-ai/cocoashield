@@ -86,4 +86,12 @@ export class ConfigService {
   get uploadsDir(): string {
     return this.envConfig.UPLOADS_DIR;
   }
+
+  get isProduction(): boolean {
+    return this.nodeEnv === Environment.PRODUCTION;
+  }
+
+  get demoInferenceMode(): boolean {
+    return this.envConfig.DEMO_INFERENCE_MODE === 'true';
+  }
 }

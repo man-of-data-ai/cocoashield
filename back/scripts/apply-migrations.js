@@ -34,6 +34,14 @@ async function main() {
   });
   await client.connect();
 
+  // Deux conteneurs qui démarrent en même temps liraient le même ensemble de
+  // migrations « non appliquées ». La clé primaire de schema_migrations finit
+  // par les départager, mais par un crash : le verrou les sérialise proprement.
+  // Verrou de session, relâché par client.end() comme par la mort du process.
+  await client.query('SELECT pg_advisory_lock(hashtext($1))', [
+    'cocoashield:schema_migrations',
+  ]);
+
   await client.query(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
       name varchar PRIMARY KEY,
