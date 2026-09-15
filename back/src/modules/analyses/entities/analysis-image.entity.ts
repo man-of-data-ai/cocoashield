@@ -67,6 +67,15 @@ export class AnalysisImage extends RestEntity {
   @Column({ type: 'float', nullable: true })
   confidence: number | null;
 
+  /**
+   * Version du modèle ayant produit `result` (colonne posée par
+   * 20260826_model_version.sql). Reste nulle tant que l'inférence ONNX n'est
+   * pas rétablie sur cette branche, mais la colonne porte des valeurs en
+   * production : la déclarer évite que `synchronize` la supprime en dev.
+   */
+  @Column({ name: 'model_version', type: 'varchar', nullable: true })
+  modelVersion: string | null;
+
   @Column({ type: 'float', nullable: true })
   latitude: number | null;
 

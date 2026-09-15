@@ -19,19 +19,19 @@ export class ConfigSchema {
 
   // Database
   @IsString()
-  DB_HOST: string;
+  DATABASE_HOST: string;
 
   @IsNumber()
-  DB_PORT: number = 5432;
+  DATABASE_PORT: number = 5432;
 
   @IsString()
-  DB_NAME: string;
+  DATABASE_NAME: string;
 
   @IsString()
-  DB_USERNAME: string;
+  DATABASE_USERNAME: string;
 
   @IsString()
-  DB_PASSWORD: string;
+  DATABASE_PASSWORD: string;
 
   // Better Auth
   @IsString()
