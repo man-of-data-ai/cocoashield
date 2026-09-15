@@ -46,3 +46,20 @@ DO $$ BEGIN
   ALTER TYPE analysis_image_geolocation_quality_enum ADD VALUE IF NOT EXISTS 'gnss_seul';
   ALTER TYPE analysis_image_geolocation_quality_enum ADD VALUE IF NOT EXISTS 'saisie_manuelle';
 EXCEPTION WHEN undefined_object THEN NULL; END $$;
+
+-- Contacts producteur sur la parcelle, et rattachement des missions au vecteur
+-- et aux parcelles couvertes : champs présents dans parcel.entity.ts /
+-- mission.entity.ts sans migration correspondante. En production
+-- (synchronize=false) leur absence casse toute lecture de parcelle ou mission.
+ALTER TABLE parcel ADD COLUMN IF NOT EXISTS producer_name varchar;
+ALTER TABLE parcel ADD COLUMN IF NOT EXISTS producer_email varchar;
+ALTER TABLE parcel ADD COLUMN IF NOT EXISTS producer_phone varchar;
+
+ALTER TABLE mission ADD COLUMN IF NOT EXISTS drone_profile_id varchar;
+ALTER TABLE mission ADD COLUMN IF NOT EXISTS parcel_ids jsonb NOT NULL DEFAULT '[]'::jsonb;
+
+-- `missionDate` n'est plus nullable côté entité. Les missions créées avant ce
+-- changement n'ont pas de date : on retombe sur leur date de création plutôt
+-- que de faire échouer la contrainte.
+UPDATE mission SET mission_date = created_at WHERE mission_date IS NULL;
+ALTER TABLE mission ALTER COLUMN mission_date SET NOT NULL;

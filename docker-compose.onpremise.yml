@@ -37,11 +37,11 @@ services:
       NODE_ENV: development
       APP_NAME: cocoashield-onpremise
       PORT: 3000
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_NAME: cocoashield
-      DB_USERNAME: cocoashield
-      DB_PASSWORD: cocoashield
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_NAME: cocoashield
+      DATABASE_USERNAME: cocoashield
+      DATABASE_PASSWORD: cocoashield
       BETTER_AUTH_SECRET: cocoashield-demo-onpremise-change-me
       BETTER_AUTH_URL: http://localhost:3000
       WEB_URL: http://localhost:3002
