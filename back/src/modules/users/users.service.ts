@@ -72,6 +72,7 @@ export class UsersService {
       role: profile.role,
       cooperative: profile.cooperative,
       organizationId: profile.organizationId,
+      defaultParcelId: profile.defaultParcelId,
       organizationOffer: organization?.offer ?? null,
       status: profile.status,
       isPlatformAdmin: profile.isPlatformAdmin,
@@ -91,7 +92,7 @@ export class UsersService {
     const map = new Map(profiles.map((profile) => [profile.userId, profile]));
     return Promise.all(users.map(async (user) => {
       const profile = await this.promoteLegacyPlatformAdmin(map.get(user.id) ?? await this.ensureProfile(user.id));
-      return { ...user, role: profile.role, cooperative: profile.cooperative, organizationId: profile.organizationId, status: profile.status, isPlatformAdmin: profile.isPlatformAdmin, managedOrganizationIds: await this.managedOrganizationIds(profile) };
+      return { ...user, role: profile.role, cooperative: profile.cooperative, organizationId: profile.organizationId, defaultParcelId: profile.defaultParcelId, status: profile.status, isPlatformAdmin: profile.isPlatformAdmin, managedOrganizationIds: await this.managedOrganizationIds(profile) };
     }));
   }
 
@@ -177,7 +178,7 @@ export class UsersService {
     await this.updateIdentity(userId, { name, email });
     if (password) await this.setPassword(userId, password);
     const fresh = await this.dataSource.query(`SELECT id, name, email, username, "createdAt" FROM "user" WHERE id = $1 LIMIT 1`, [userId]);
-    return { ...fresh[0], role: profile.role, cooperative: profile.cooperative, organizationId: profile.organizationId, status: profile.status, isPlatformAdmin: profile.isPlatformAdmin, managedOrganizationIds: await this.managedOrganizationIds(profile) };
+    return { ...fresh[0], role: profile.role, cooperative: profile.cooperative, organizationId: profile.organizationId, defaultParcelId: profile.defaultParcelId, status: profile.status, isPlatformAdmin: profile.isPlatformAdmin, managedOrganizationIds: await this.managedOrganizationIds(profile) };
   }
 
   async updateForAdmin(actorId: string, userId: string, dto: UpdateUserProfileDto) {
