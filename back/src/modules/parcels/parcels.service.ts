@@ -86,6 +86,44 @@ export class ParcelsService {
     return parcel;
   }
 
+  async resolveForCapture(
+    userId: string,
+    position: { latitude: number; longitude: number } | null,
+  ): Promise<string> {
+    const scope = await this.usersService.getAccessScope(userId);
+
+    if (position) {
+      const containing = await this.parcelRepository.findContaining(
+        position.latitude,
+        position.longitude,
+        userId,
+        scope.organizationIds,
+        scope.isPlatformAdmin,
+      );
+      if (containing) return containing.id;
+    }
+
+    const { defaultParcelId } = await this.usersService.ensureProfile(userId);
+    if (!defaultParcelId) {
+      throw new BadRequestException(
+        "Aucune parcelle ne contient cette position et aucune parcelle par défaut n'est rattachée à ce compte.",
+      );
+    }
+
+    const fallback = await this.parcelRepository.findByIdAccessible(
+      defaultParcelId,
+      userId,
+      scope.organizationIds,
+      scope.isPlatformAdmin,
+    );
+    if (!fallback) {
+      throw new BadRequestException(
+        "La parcelle par défaut de ce compte est introuvable ou hors de son périmètre.",
+      );
+    }
+    return fallback.id;
+  }
+
   updateStatus(id: string, status: ParcelStatus): Promise<void> {
     return this.parcelRepository.updateStatus(id, status);
   }
