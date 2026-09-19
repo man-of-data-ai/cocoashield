@@ -17,7 +17,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { API_BASE_URL, authClient } from './src/auth/client';
 import { sendCapture } from './src/api/capture';
 import { usePosition } from './src/hooks/usePosition';
-import { SignInPanel } from './src/components/SignInPanel';
+import { SignInScreen } from './src/components/SignInScreen';
 import { useCamHeatmap } from './src/hooks/useCamHeatmap';
 import { BeforeAfterSlider } from './src/components/BeforeAfterSlider';
 import { StackedComparisonModal } from './src/components/StackedComparisonModal';
@@ -35,7 +35,7 @@ export default function App() {
   const [compareVisible, setCompareVisible] = useState(false);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
-  const { data: session } = authClient.useSession();
+  const { data: session, isPending: sessionPending } = authClient.useSession();
   const readPosition = usePosition();
 
   async function send() {
@@ -115,6 +115,19 @@ export default function App() {
 
   const modelReady = state.status === 'ready';
 
+  if (sessionPending) {
+    return (
+      <SafeAreaView style={[styles.safeArea, styles.centered]}>
+        <ActivityIndicator />
+        <StatusBar style="auto" />
+      </SafeAreaView>
+    );
+  }
+
+  if (!session) {
+    return <SignInScreen />;
+  }
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.container}>
@@ -179,23 +192,19 @@ export default function App() {
         {result && !isClassifying && <ResultCard result={result} />}
 
         {result && !isClassifying && (
-          session ? (
-            <Pressable
-              style={[styles.button, (sending || sent) && styles.buttonDisabled]}
-              onPress={send}
-              disabled={sending || sent}
-            >
-              {sending ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <Text style={styles.buttonText}>
-                  {sent ? '\u2713 Envoye a la plateforme' : '\u2191 Envoyer a la plateforme'}
-                </Text>
-              )}
-            </Pressable>
-          ) : (
-            <SignInPanel />
-          )
+          <Pressable
+            style={[styles.button, (sending || sent) && styles.buttonDisabled]}
+            onPress={send}
+            disabled={sending || sent}
+          >
+            {sending ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={styles.buttonText}>
+                {sent ? '\u2713 Envoye a la plateforme' : '\u2191 Envoyer a la plateforme'}
+              </Text>
+            )}
+          </Pressable>
         )}
 
         {imageUri && camGrid && !isClassifying && (
@@ -226,6 +235,10 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: '#F7F9F7',
+  },
+  centered: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   container: {
     flexGrow: 1,
