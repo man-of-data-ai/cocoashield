@@ -76,6 +76,10 @@ export class ConfigService {
     return this.envConfig.WEB_URL;
   }
 
+  get mobileAppScheme(): string {
+    return this.envConfig.MOBILE_APP_SCHEME;
+  }
+
   get redisConnection(): { host: string; port: number } {
     return {
       host: this.envConfig.REDIS_HOST,
