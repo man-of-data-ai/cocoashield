@@ -146,13 +146,16 @@ export class AnalysesService {
     missionName?: string,
     profileId?: string,
   ): Promise<Analysis> {
-    const located = imageMetas.find(
-      (meta) => typeof meta?.latitude === 'number' && typeof meta?.longitude === 'number',
-    );
-    const parcelId = await this.parcelsService.resolveForCapture(
-      userId,
-      located ? { latitude: located.latitude!, longitude: located.longitude! } : null,
-    );
+    let position: { latitude: number; longitude: number } | null = null;
+    for (let index = 0; index < files.length && !position; index += 1) {
+      const gps = resolvePosition(
+        await this.imageGeoService.extractGps(files[index].path),
+        imageMetas[index],
+      );
+      if (gps) position = { latitude: gps.latitude, longitude: gps.longitude };
+    }
+
+    const parcelId = await this.parcelsService.resolveForCapture(userId, position);
     return this.create(parcelId, userId, files, imageMetas, missionId, missionName, profileId);
   }
 
