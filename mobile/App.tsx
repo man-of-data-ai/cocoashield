@@ -14,6 +14,10 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import * as ImagePicker from 'expo-image-picker';
 
+import { API_BASE_URL, authClient } from './src/auth/client';
+import { sendCapture } from './src/api/capture';
+import { usePosition } from './src/hooks/usePosition';
+import { SignInPanel } from './src/components/SignInPanel';
 import { useCamHeatmap } from './src/hooks/useCamHeatmap';
 import { BeforeAfterSlider } from './src/components/BeforeAfterSlider';
 import { StackedComparisonModal } from './src/components/StackedComparisonModal';
@@ -29,11 +33,35 @@ export default function App() {
   const [camGrid, setCamGrid] = useState<number[][] | null>(null);
   const [isClassifying, setIsClassifying] = useState(false);
   const [compareVisible, setCompareVisible] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const { data: session } = authClient.useSession();
+  const readPosition = usePosition();
+
+  async function send() {
+    if (!imageUri || !result) return;
+    setSending(true);
+    try {
+      const cookie = await authClient.getCookie();
+      await sendCapture(
+        { baseUrl: API_BASE_URL, cookie },
+        { uri: imageUri },
+        result,
+        await readPosition(),
+      );
+      setSent(true);
+    } catch (err: any) {
+      Alert.alert('Envoi impossible', err?.message ?? 'Echec de l\'envoi');
+    } finally {
+      setSending(false);
+    }
+  }
 
   async function runAnalysis(uri: string) {
     setImageUri(uri);
     setResult(null);
     setCamGrid(null);
+    setSent(false);
     setIsClassifying(true);
     try {
       const { result: r, camGrid: g } = await analyze(uri);
@@ -149,6 +177,26 @@ export default function App() {
         )}
 
         {result && !isClassifying && <ResultCard result={result} />}
+
+        {result && !isClassifying && (
+          session ? (
+            <Pressable
+              style={[styles.button, (sending || sent) && styles.buttonDisabled]}
+              onPress={send}
+              disabled={sending || sent}
+            >
+              {sending ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.buttonText}>
+                  {sent ? '\u2713 Envoye a la plateforme' : '\u2191 Envoyer a la plateforme'}
+                </Text>
+              )}
+            </Pressable>
+          ) : (
+            <SignInPanel />
+          )
+        )}
 
         {imageUri && camGrid && !isClassifying && (
           <Pressable
