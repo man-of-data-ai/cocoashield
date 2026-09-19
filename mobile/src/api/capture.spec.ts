@@ -1,33 +1,43 @@
-import { captureFields, sendCapture } from './capture';
+const fileParts: string[][] = [];
+jest.mock('expo-file-system', () => ({
+  File: class {
+    constructor(...uris: string[]) {
+      fileParts.push(uris);
+    }
+  },
+}));
+
+import { buildCaptureForm, captureFields, sendCapture } from './capture';
 
 const RESULT = { label: 'Cssvd' as const, confidence: 0.91 };
 const PHOTO = { uri: 'file:///tmp/leaf.jpg' };
 
 describe('captureFields', () => {
   it('sends the on-device verdict so the server does not classify again', () => {
-    expect(JSON.parse(captureFields(PHOTO, RESULT, null).results)).toEqual([
+    expect(JSON.parse(captureFields(RESULT, null))).toEqual([
       { source: 'mobile', result: 'infected', confidence: 0.91 },
     ]);
   });
 
   it('maps a healthy verdict to the server vocabulary', () => {
-    const { results } = captureFields(PHOTO, { label: 'Healthy', confidence: 0.8 }, null);
-
-    expect(JSON.parse(results)[0].result).toBe('healthy');
+    expect(JSON.parse(captureFields({ label: 'Healthy', confidence: 0.8 }, null))[0].result).toBe(
+      'healthy',
+    );
   });
 
   it('attaches the position when the device has one', () => {
-    const { results } = captureFields(PHOTO, RESULT, { latitude: 5.78, longitude: -6.65 });
-
-    expect(JSON.parse(results)[0]).toMatchObject({ latitude: 5.78, longitude: -6.65 });
+    expect(JSON.parse(captureFields(RESULT, { latitude: 5.78, longitude: -6.65 }))[0]).toMatchObject(
+      { latitude: 5.78, longitude: -6.65 },
+    );
   });
+});
 
-  it('attaches the photo itself', () => {
-    expect(captureFields(PHOTO, RESULT, null).image).toEqual({
-      uri: PHOTO.uri,
-      name: 'capture.jpg',
-      type: 'image/jpeg',
-    });
+describe('buildCaptureForm', () => {
+  it('attaches the photo as a file the platform fetch can read, not a uri descriptor', () => {
+    fileParts.length = 0;
+    buildCaptureForm(PHOTO, RESULT, null);
+
+    expect(fileParts).toEqual([[PHOTO.uri]]);
   });
 });
 

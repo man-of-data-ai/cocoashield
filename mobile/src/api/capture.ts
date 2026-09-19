@@ -1,3 +1,4 @@
+import { File } from 'expo-file-system';
 import type { CocoaShieldResult } from '../hooks/useCamHeatmap';
 
 export interface Photo {
@@ -17,22 +18,15 @@ export interface CaptureTarget {
 
 const SERVER_RESULT = { Cssvd: 'infected', Healthy: 'healthy' } as const;
 
-export function captureFields(
-  photo: Photo,
-  result: CocoaShieldResult,
-  position: Position | null,
-) {
-  return {
-    image: { uri: photo.uri, name: 'capture.jpg', type: 'image/jpeg' },
-    results: JSON.stringify([
-      {
-        source: 'mobile',
-        result: SERVER_RESULT[result.label],
-        confidence: result.confidence,
-        ...(position ?? {}),
-      },
-    ]),
-  };
+export function captureFields(result: CocoaShieldResult, position: Position | null): string {
+  return JSON.stringify([
+    {
+      source: 'mobile',
+      result: SERVER_RESULT[result.label],
+      confidence: result.confidence,
+      ...(position ?? {}),
+    },
+  ]);
 }
 
 export function buildCaptureForm(
@@ -40,10 +34,9 @@ export function buildCaptureForm(
   result: CocoaShieldResult,
   position: Position | null,
 ): FormData {
-  const { image, results } = captureFields(photo, result, position);
   const form = new FormData();
-  form.append('images', image as unknown as Blob);
-  form.append('results', results);
+  form.append('images', new File(photo.uri) as unknown as Blob);
+  form.append('results', captureFields(result, position));
   return form;
 }
 
