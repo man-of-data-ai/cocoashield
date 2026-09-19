@@ -34,17 +34,19 @@ export class ImageInferenceService {
   constructor(private readonly config: ConfigService) {}
 
   private getSession(): Promise<ort.InferenceSession> {
-    if (!this.sessionPromise) {
-      const modelPath = this.config.modelPath;
-      this.logger.log(`Loading ONNX model from ${modelPath}`);
-      this.sessionPromise = ort.InferenceSession.create(modelPath).catch(
-        (error: Error) => {
-          this.sessionPromise = null;
-          throw error;
-        },
-      );
-    }
-    return this.sessionPromise;
+    const loaded = this.sessionPromise;
+    if (loaded) return loaded;
+
+    const modelPath = this.config.modelPath;
+    this.logger.log(`Loading ONNX model from ${modelPath}`);
+    const session = ort.InferenceSession.create(modelPath).catch(
+      (error: Error) => {
+        this.sessionPromise = null;
+        throw error;
+      },
+    );
+    this.sessionPromise = session;
+    return session;
   }
 
   private async preprocess(filePath: string): Promise<ort.Tensor> {
