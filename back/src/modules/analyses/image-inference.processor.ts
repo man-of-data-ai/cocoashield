@@ -34,13 +34,14 @@ export class ImageInferenceProcessor extends WorkerHost {
 
     try {
       const filePath = path.join(this.configService.uploadsDir, image.filePath);
-      const { result, confidence } =
+      const { result, confidence, modelVersion } =
         await this.imageInferenceService.classify(filePath);
 
       await this.analysisImageRepository.update(image.id, {
         status: AnalysisImageStatus.PROCESSED,
         result,
         confidence,
+        modelVersion,
       });
     } catch (error) {
       this.logger.error(

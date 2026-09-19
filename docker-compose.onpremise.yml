@@ -48,7 +48,6 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       UPLOADS_DIR: /app/uploads
-      DEMO_INFERENCE_MODE: "true"
     ports:
       - "3000:3000"
     volumes:
