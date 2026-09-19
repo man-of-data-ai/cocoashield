@@ -67,7 +67,7 @@ function MapDashboardPageContent() {
   const [focusedAnalysis, setFocusedAnalysis] = useState<Analysis | null>(null);
   const [missions, setMissions] = useState<Mission[]>([]);
   const [droneProfiles, setDroneProfiles] = useState<DroneProfile[]>([]);
-  const [refreshIntervalS, setRefreshIntervalS] = useState(10);
+  const [refreshIntervalS, setRefreshIntervalS] = useState(2);
   const [minimumConfidence, setMinimumConfidence] = useState(0.75);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -92,7 +92,7 @@ function MapDashboardPageContent() {
       else console.warn("Impossible de charger les missions :", missionsResult.reason);
       if (droneProfilesResult.status === "fulfilled") setDroneProfiles(droneProfilesResult.value);
       if (configurationResult.status === "fulfilled") {
-        setRefreshIntervalS(configurationResult.value.refreshIntervalConnectedS || 10);
+        setRefreshIntervalS(configurationResult.value.refreshIntervalConnectedS || 2);
         setMinimumConfidence(configurationResult.value.minimumConfidence ?? 0.75);
         setRuntimeSeverityThresholds({
           modere: configurationResult.value.severityModerate,
@@ -106,7 +106,7 @@ function MapDashboardPageContent() {
   }, []);
 
   useEffect(() => {
-    const intervalMs = Math.max(5, refreshIntervalS) * 1000;
+    const intervalMs = Math.max(2, refreshIntervalS) * 1000;
     const timer = window.setInterval(() => {
       parcelService.listParcels().then(setParcels).catch(() => undefined);
     }, intervalMs);

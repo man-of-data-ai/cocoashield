@@ -14,7 +14,7 @@ export class PlatformSettings extends RestEntity {
   @Column({ name: 'min_images_per_zone', type: 'int', default: 5 }) minImagesPerZone: number;
   @Column({ name: 'dedup_distance_m', type: 'float', default: 2 }) dedupDistanceM: number;
   @Column({ name: 'dedup_window_s', type: 'int', default: 10 }) dedupWindowS: number;
-  @Column({ name: 'refresh_interval_connected_s', type: 'int', default: 10 }) refreshIntervalConnectedS: number;
+  @Column({ name: 'refresh_interval_connected_s', type: 'int', default: 2 }) refreshIntervalConnectedS: number;
   @Column({ name: 'batch_recalc_max_delay_min', type: 'int', default: 5 }) batchRecalcMaxDelayMin: number;
   @Column({ name: 'sync_retry_interval_min', type: 'int', default: 15 }) syncRetryIntervalMin: number;
   @Column({ name: 'offline_tile_cache_size_mb', type: 'int', default: 250 }) offlineTileCacheSizeMb: number;
