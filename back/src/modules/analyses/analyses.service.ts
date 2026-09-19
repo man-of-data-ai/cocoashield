@@ -138,6 +138,24 @@ export class AnalysesService {
     return this.findOne(analysis.id);
   }
 
+  async createFromCapture(
+    userId: string,
+    files: Express.Multer.File[],
+    imageMetas: AnalysisImageMeta[],
+    missionId?: string,
+    missionName?: string,
+    profileId?: string,
+  ): Promise<Analysis> {
+    const located = imageMetas.find(
+      (meta) => typeof meta?.latitude === 'number' && typeof meta?.longitude === 'number',
+    );
+    const parcelId = await this.parcelsService.resolveForCapture(
+      userId,
+      located ? { latitude: located.latitude!, longitude: located.longitude! } : null,
+    );
+    return this.create(parcelId, userId, files, imageMetas, missionId, missionName, profileId);
+  }
+
   async findOne(id: string): Promise<Analysis> {
     const analysis = await this.analysisRepository.findById(id);
     if (!analysis) {
