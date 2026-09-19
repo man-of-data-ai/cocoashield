@@ -24,7 +24,7 @@ import {
   AnalysisResult,
   AnalysisStatus,
 } from './entities/analysis.entity';
-import { ImageGeoService } from './image-geo.service';
+import { ImageGeoService, resolvePosition } from './image-geo.service';
 import { AnalysisImageRepository } from './repositories/analysis-image.repository';
 import { AnalysisRepository } from './repositories/analysis.repository';
 
@@ -92,7 +92,7 @@ export class AnalysesService {
       const meta = imageMetas[index];
       const isPreClassified =
         meta?.source === AnalysisImageSource.MOBILE && meta.result;
-      const gps = await this.imageGeoService.extractGps(file.path);
+      const gps = resolvePosition(await this.imageGeoService.extractGps(file.path), meta);
 
       const geolocationQuality = gps?.geolocationQuality ?? GeolocationQuality.NONE;
 
