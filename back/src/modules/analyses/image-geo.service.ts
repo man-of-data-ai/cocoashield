@@ -14,9 +14,35 @@ export interface ImageGps {
   geolocationPrecisionM: number | null;
 }
 
+const DECLARED_POSITION_PRECISION_M = 5;
+
 function finite(value: unknown): number | null {
   const n = typeof value === 'number' ? value : Number(value);
   return Number.isFinite(n) ? n : null;
+}
+
+export function resolvePosition(
+  exif: ImageGps | null,
+  declared: { latitude?: number; longitude?: number } | undefined,
+): ImageGps | null {
+  if (exif) return exif;
+
+  const latitude = finite(declared?.latitude);
+  const longitude = finite(declared?.longitude);
+  if (latitude === null || longitude === null) return null;
+  if (Math.abs(latitude) > 90 || Math.abs(longitude) > 180) return null;
+
+  return {
+    latitude,
+    longitude,
+    altitudeM: null,
+    gimbalYaw: null,
+    gimbalPitch: null,
+    gimbalRoll: null,
+    captureTimestamp: null,
+    geolocationQuality: GeolocationQuality.MANUAL,
+    geolocationPrecisionM: DECLARED_POSITION_PRECISION_M,
+  };
 }
 
 @Injectable()
