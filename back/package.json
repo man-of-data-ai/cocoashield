@@ -25,6 +25,7 @@
     "seed:demo": "ts-node scripts/seed-demo.ts"
   },
   "dependencies": {
+    "@better-auth/expo": "^1.7.5",
     "@nestjs/bullmq": "^11.0.4",
     "@nestjs/common": "^11.0.1",
     "@nestjs/core": "^11.0.1",

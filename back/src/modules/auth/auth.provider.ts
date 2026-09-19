@@ -1,5 +1,6 @@
 import { betterAuth } from 'better-auth';
 import { username } from 'better-auth/plugins';
+import { expo } from '@better-auth/expo';
 import { Pool } from 'pg';
 import { ConfigService } from '../../libs/infrastructure/config/config.service';
 import { routes } from '../../routes';
@@ -10,11 +11,16 @@ export function createAuth(config: ConfigService) {
     secret: config.betterAuthSecret,
     baseURL: config.betterAuthUrl,
     basePath: routes.betterAuthBasePath,
-    trustedOrigins: [config.webUrl],
+    trustedOrigins: [
+      config.webUrl,
+      `${config.mobileAppScheme}://`,
+      `${config.mobileAppScheme}://*`,
+      ...(config.isProduction ? [] : ['exp://', 'exp://*', 'exp://*/*']),
+    ],
     emailAndPassword: {
       enabled: true,
     },
-    plugins: [username()],
+    plugins: [username(), expo()],
 
     advanced: {
       database: {
