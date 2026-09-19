@@ -46,6 +46,9 @@ export class ConfigSchema {
   @IsUrl({ require_tld: false })
   WEB_URL: string = 'http://localhost:3002';
 
+  @IsString()
+  MOBILE_APP_SCHEME: string = 'cocoashield';
+
   // Redis / BullMQ
   @IsString()
   REDIS_HOST: string;
