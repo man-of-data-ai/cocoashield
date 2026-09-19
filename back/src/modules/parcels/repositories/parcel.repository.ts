@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, IsNull, Repository } from 'typeorm';
+import { Brackets, In, IsNull, Repository } from 'typeorm';
 import { Parcel } from '../entities/parcel.entity';
 
 @Injectable()
@@ -39,6 +39,37 @@ export class ParcelRepository {
       relations: { analyses: { images: true, mission: true } },
       order: { analyses: { createdAt: 'DESC' } },
     });
+  }
+
+  async findContaining(
+    latitude: number,
+    longitude: number,
+    actorId: string,
+    organizationIds: string[],
+    isPlatformAdmin: boolean,
+  ): Promise<Parcel | null> {
+    const query = this.repository
+      .createQueryBuilder('parcel')
+      .where(
+        'ST_Contains(parcel.boundary, ST_SetSRID(ST_MakePoint(:longitude, :latitude), 4326))',
+        { longitude, latitude },
+      );
+
+    if (!isPlatformAdmin) {
+      query.andWhere(
+        organizationIds.length
+          ? new Brackets((scope) =>
+              scope
+                .where('parcel.organization_id IN (:...organizationIds)', { organizationIds })
+                .orWhere('parcel.owner_id = :actorId AND parcel.organization_id IS NULL', { actorId }),
+            )
+          : new Brackets((scope) =>
+              scope.where('parcel.owner_id = :actorId AND parcel.organization_id IS NULL', { actorId }),
+            ),
+      );
+    }
+
+    return query.orderBy('parcel.created_at', 'DESC').getOne();
   }
 
   async updateStatus(id: string, status: Parcel['status']): Promise<void> {
