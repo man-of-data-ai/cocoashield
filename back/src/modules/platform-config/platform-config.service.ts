@@ -21,7 +21,7 @@ const DEFAULT_SETTINGS = {
   minImagesPerZone: 5,
   dedupDistanceM: 2,
   dedupWindowS: 10,
-  refreshIntervalConnectedS: 10,
+  refreshIntervalConnectedS: 2,
   batchRecalcMaxDelayMin: 5,
   syncRetryIntervalMin: 15,
   offlineTileCacheSizeMb: 250,
