@@ -138,6 +138,27 @@ export class AnalysesService {
     return this.findOne(analysis.id);
   }
 
+  async createFromCapture(
+    userId: string,
+    files: Express.Multer.File[],
+    imageMetas: AnalysisImageMeta[],
+    missionId?: string,
+    missionName?: string,
+    profileId?: string,
+  ): Promise<Analysis> {
+    let position: { latitude: number; longitude: number } | null = null;
+    for (let index = 0; index < files.length && !position; index += 1) {
+      const gps = resolvePosition(
+        await this.imageGeoService.extractGps(files[index].path),
+        imageMetas[index],
+      );
+      if (gps) position = { latitude: gps.latitude, longitude: gps.longitude };
+    }
+
+    const parcelId = await this.parcelsService.resolveForCapture(userId, position);
+    return this.create(parcelId, userId, files, imageMetas, missionId, missionName, profileId);
+  }
+
   async findOne(id: string): Promise<Analysis> {
     const analysis = await this.analysisRepository.findById(id);
     if (!analysis) {
