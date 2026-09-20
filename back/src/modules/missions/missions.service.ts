@@ -1,92 +1,64 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { CreateMissionDto } from './dtos/create-mission.dto';
 import { Mission } from './entities/mission.entity';
 import { MissionRepository } from './repositories/mission.repository';
+import { UsersService } from '../users/users.service';
+import { UserRole } from '../users/entities/user-profile.entity';
 
 @Injectable()
 export class MissionsService {
-  constructor(private readonly missionRepository: MissionRepository) {}
+  constructor(
+    private readonly missionRepository: MissionRepository,
+    private readonly usersService: UsersService,
+  ) {}
 
-  create(ownerId: string, dto: CreateMissionDto): Promise<Mission> {
+  async create(ownerId: string, dto: CreateMissionDto): Promise<Mission> {
+    const scope = await this.usersService.getAccessScope(ownerId);
+    if (scope.role !== UserRole.ADMINISTRATEUR || scope.isPlatformAdmin) {
+      throw new ForbiddenException('Seul un administrateur client peut créer une mission.');
+    }
+    const organizationId = scope.isPlatformAdmin ? scope.primaryOrganizationId : scope.organizationIds[0] ?? scope.primaryOrganizationId;
+    if (!scope.isPlatformAdmin && !organizationId) throw new BadRequestException('Votre compte doit être rattaché à une organisation pour créer une mission.');
     return this.missionRepository.create({
       ownerId,
+      organizationId: organizationId ?? null,
       name: dto.name,
-      missionDate: dto.missionDate ? new Date(dto.missionDate) : new Date(),
-      notes: dto.notes ?? null,
+      missionDate: new Date(dto.missionDate),
+      droneProfileId: dto.droneProfileId,
+      parcelIds: dto.parcelIds,
+      notes: dto.notes?.trim() || null,
     });
   }
 
-  findAllForOwner(ownerId: string): Promise<Mission[]> {
-    return this.missionRepository.findByOwner(ownerId);
+  async updateNotes(id: string, actorId: string, notes: string): Promise<Mission> {
+    const scope = await this.usersService.getAccessScope(actorId);
+    if (![UserRole.ADMINISTRATEUR, UserRole.AGRONOME_TERRAIN].includes(scope.role) || scope.isPlatformAdmin) {
+      throw new ForbiddenException('Seul un administrateur client ou un agronome peut ajouter une note à une mission.');
+    }
+    const mission = await this.missionRepository.findByIdAccessible(id, actorId, scope.organizationIds, scope.isPlatformAdmin);
+    if (!mission) throw new NotFoundException('Mission not found');
+    await this.missionRepository.updateNotes(id, notes.trim() || null);
+    const updated = await this.missionRepository.findByIdAccessible(id, actorId, scope.organizationIds, scope.isPlatformAdmin);
+    if (!updated) throw new NotFoundException('Mission not found');
+    return updated;
+  }
+
+  async findAllForOwner(ownerId: string): Promise<Mission[]> {
+    const scope = await this.usersService.getAccessScope(ownerId);
+    if (scope.role === UserRole.DIRECTION_CCC) throw new NotFoundException('Mission data is not available for this role');
+    return this.missionRepository.findAccessible(ownerId, scope.organizationIds, scope.isPlatformAdmin);
   }
 
   async findOneForOwner(id: string, ownerId: string): Promise<Mission> {
-    const mission = await this.missionRepository.findByIdAndOwner(id, ownerId);
-    if (!mission) {
-      throw new NotFoundException('Mission not found');
-    }
+    const scope = await this.usersService.getAccessScope(ownerId);
+    if (scope.role === UserRole.DIRECTION_CCC) throw new NotFoundException('Mission not found');
+    const mission = await this.missionRepository.findByIdAccessible(id, ownerId, scope.organizationIds, scope.isPlatformAdmin);
+    if (!mission) throw new NotFoundException('Mission not found');
     return mission;
   }
 
-  /**
-   * Résout une mission à partir d'un id (doit exister) ou d'un nom
-   * (créée à la volée si elle n'existe pas encore pour ce owner). Utilisé
-   * lors de la création d'une analyse, où le client peut fournir l'un ou
-   * l'autre.
-   */
-  async resolve(
-    ownerId: string,
-    missionId?: string | null,
-    missionName?: string | null,
-  ): Promise<Mission | null> {
-    if (missionId) {
-      return this.findOneForOwner(missionId, ownerId);
-    }
-    const trimmedName = missionName?.trim();
-    if (!trimmedName) {
-      return null;
-    }
-    const existing = await this.missionRepository.findByNameAndOwner(
-      trimmedName,
-      ownerId,
-    );
-    if (existing) {
-      return existing;
-    }
-    return this.missionRepository.create({
-      ownerId,
-      name: trimmedName,
-      missionDate: new Date(),
-      notes: null,
-    });
-  }
-
-  /**
-   * Suppression réversible. Les analyses gardent leur `mission_id` : la
-   * relation est en `SET NULL` uniquement sur suppression physique, que l'on
-   * ne pratique pas ici.
-   */
-  async softDelete(id: string, ownerId: string): Promise<void> {
-    await this.findOneForOwner(id, ownerId);
-    await this.missionRepository.softDelete(id);
-  }
-
-  async restore(id: string, ownerId: string): Promise<Mission> {
-    const mission = await this.missionRepository.findDeletedByIdAndOwner(
-      id,
-      ownerId,
-    );
-    if (!mission) {
-      throw new NotFoundException('Mission introuvable.');
-    }
-    if (!mission.deletedAt) {
-      throw new BadRequestException("Cette mission n'est pas supprimée.");
-    }
-    await this.missionRepository.restore(id);
-    return this.findOneForOwner(id, ownerId);
+  async resolve(ownerId: string, missionId?: string | null): Promise<Mission | null> {
+    if (!missionId) return null;
+    return this.findOneForOwner(missionId, ownerId);
   }
 }

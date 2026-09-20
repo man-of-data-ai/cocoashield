@@ -1,35 +1,22 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import archiver from 'archiver';
-import type { Archiver } from 'archiver';
-import { createReadStream } from 'fs';
-import { access } from 'fs/promises';
+import * as fs from 'fs/promises';
 import * as path from 'path';
-import { Repository } from 'typeorm';
-import { ConfigService } from '../../core/config/services/config.service';
-import { AnalysisImageStatus } from '../analyses/entities/analysis-image.entity';
-import { AnalysisResult } from '../analyses/entities/analysis-result.enum';
-import {
-  Parcel,
-  TerrainVerificationStatus,
-} from '../parcels/entities/parcel.entity';
+import { In, IsNull, Repository } from 'typeorm';
+import { ConfigService } from '../../libs/infrastructure/config/config.service';
+import { Analysis } from '../analyses/entities/analysis.entity';
+import { Parcel, TerrainVerificationStatus } from '../parcels/entities/parcel.entity';
 import { CreateExportDto } from './dtos/create-export.dto';
+import { AuditService } from '../audit/audit.service';
+import { UsersService } from '../users/users.service';
 import {
   ExportFormat,
   ExportRecord,
   ExportScope,
 } from './entities/export-record.entity';
-import { createReportPdf } from './utils/pdf';
-
-/** Nombre maximum de zones exportables en une fois. */
-const MAX_EXPORTED_PARCELS = 5_000;
-
-type ParcelMetrics = {
-  parcelId: string;
-  imageCount: number;
-  processedCount: number;
-  infectedCount: number;
-};
+import { ArchiveEntry, createZip } from './utils/archive';
+import { createSimplePdf } from './utils/pdf';
+import { createShapefileZip } from './utils/shapefile';
 
 type ExportFeature = {
   type: 'Feature';
@@ -45,44 +32,50 @@ type ExportFeature = {
     image_count: number;
     infected_images: number;
     missions: string;
+    severity: string;
+    detection_date: string;
+    zone_status: string;
   };
 };
 
 type PreparedExport = {
   features: ExportFeature[];
-  parcelIds: string[];
+  analysesByParcel: Map<string, Analysis[]>;
   scopeLabel: string;
 };
 
-const METERS_PER_DEGREE_LAT = 111_320;
-
-/** Surface approchée d'un anneau WGS84, en hectares (projection locale). */
 function polygonAreaHa(boundary: Parcel['boundary']): number {
   const ring = boundary.coordinates[0] ?? [];
   if (ring.length < 4) return 0;
-
-  const averageLatitude =
-    ring.reduce((sum, point) => sum + point[1], 0) / ring.length;
-  const metersPerDegreeLon =
-    METERS_PER_DEGREE_LAT * Math.cos((averageLatitude * Math.PI) / 180);
-
+  const avgLat =
+    ring.reduce((sum, point) => sum + point[1], 0) / Math.max(ring.length, 1);
+  const metersPerDegreeLat = 111_320;
+  const metersPerDegreeLon = 111_320 * Math.cos((avgLat * Math.PI) / 180);
   let area = 0;
   for (let index = 0; index < ring.length - 1; index += 1) {
     const [lng1, lat1] = ring[index];
     const [lng2, lat2] = ring[index + 1];
-    area +=
-      lng1 * metersPerDegreeLon * (lat2 * METERS_PER_DEGREE_LAT) -
-      lng2 * metersPerDegreeLon * (lat1 * METERS_PER_DEGREE_LAT);
+    const x1 = lng1 * metersPerDegreeLon;
+    const y1 = lat1 * metersPerDegreeLat;
+    const x2 = lng2 * metersPerDegreeLon;
+    const y2 = lat2 * metersPerDegreeLat;
+    area += x1 * y2 - x2 * y1;
   }
   return Math.abs(area / 2) / 10_000;
 }
 
-function csvCell(value: string | number | null | undefined): string {
+function pointBufferBoundary(longitude: number, latitude: number, radiusM = 5): Parcel['boundary'] {
+  const dLat = radiusM / 111_320;
+  const dLon = radiusM / (111_320 * Math.max(0.1, Math.cos((latitude * Math.PI) / 180)));
+  return { type: 'Polygon', coordinates: [[[longitude-dLon, latitude-dLat],[longitude+dLon, latitude-dLat],[longitude+dLon, latitude+dLat],[longitude-dLon, latitude+dLat],[longitude-dLon, latitude-dLat]]] };
+}
+
+function csvCell(value: unknown): string {
   const text = String(value ?? '');
   return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
-function xmlEscape(value: string | number | null | undefined): string {
+function xml(value: unknown): string {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -93,14 +86,14 @@ function xmlEscape(value: string | number | null | undefined): string {
 
 @Injectable()
 export class ExportsService {
-  private readonly logger = new Logger(ExportsService.name);
-
   constructor(
     @InjectRepository(Parcel)
     private readonly parcelRepository: Repository<Parcel>,
     @InjectRepository(ExportRecord)
     private readonly exportRepository: Repository<ExportRecord>,
+    private readonly auditService: AuditService,
     private readonly configService: ConfigService,
+    private readonly usersService: UsersService,
   ) {}
 
   list(userId: string): Promise<ExportRecord[]> {
@@ -111,19 +104,22 @@ export class ExportsService {
     });
   }
 
-  /**
-   * Construit l'archive d'export et la renvoie sous forme de flux.
-   *
-   * L'archive est écrite au fil de l'eau : ni les fichiers générés ni les
-   * images sources ne transitent intégralement par la mémoire, et le
-   * téléchargement démarre sans attendre la fin de la génération.
-   */
+
   async generate(
     userId: string,
     userEmail: string | null,
     dto: CreateExportDto,
-  ): Promise<{ filename: string; archive: Archiver; scopeLabel: string }> {
-    this.assertScopeIsComplete(dto);
+    ipAddress: string | null = null,
+  ): Promise<{ buffer: Buffer; filename: string; contentType: string }> {
+    if (dto.scope === ExportScope.ZONE && !dto.scopeId) {
+      throw new BadRequestException('Une zone doit être sélectionnée.');
+    }
+    if (dto.scope === ExportScope.MISSION && !dto.scopeId) {
+      throw new BadRequestException('Une mission doit être sélectionnée.');
+    }
+    if (dto.scope === ExportScope.PERIOD && (!dto.dateFrom || !dto.dateTo)) {
+      throw new BadRequestException('Une période complète est requise.');
+    }
 
     const prepared = await this.prepare(userId, dto);
     if (prepared.features.length === 0) {
@@ -134,124 +130,153 @@ export class ExportsService {
       );
     }
 
-    const formats = [...new Set(dto.formats)];
-    await this.exportRepository.insert(
-      formats.map((format) => ({
+    const generated: ArchiveEntry[] = [];
+    for (const format of [...new Set(dto.formats)]) {
+      generated.push(this.generateFormat(format, prepared));
+      await this.exportRepository.save(
+        this.exportRepository.create({
+          userId,
+          userEmail,
+          scope: dto.scope,
+          scopeLabel: prepared.scopeLabel,
+          format,
+          includeSourceImages: dto.includeSourceImages,
+          verifiedOnly: dto.verifiedOnly,
+        }),
+      );
+      await this.auditService.log({
         userId,
         userEmail,
-        scope: dto.scope,
-        scopeLabel: prepared.scopeLabel,
-        format,
-        includeSourceImages: dto.includeSourceImages,
-        verifiedOnly: dto.verifiedOnly,
-      })),
-    );
-
-    const archive = archiver('zip', { zlib: { level: 9 } });
-    archive.on('warning', (error) => this.logger.warn(error.message));
-    archive.on('error', (error) => this.logger.error(error.message));
-
-    for (const format of formats) {
-      await this.appendFormat(archive, format, prepared);
+        ipAddress,
+        action: 'export.created',
+        targetType: 'export',
+        targetLabel: prepared.scopeLabel,
+        details: {
+          scope: dto.scope,
+          scopeLabel: prepared.scopeLabel,
+          format,
+          includeSourceImages: dto.includeSourceImages,
+          verifiedOnly: dto.verifiedOnly,
+          exportedZones: prepared.features.length,
+        },
+      });
     }
 
     if (dto.includeSourceImages) {
-      await this.appendSourceImages(archive, prepared.parcelIds);
+      const imageEntries = await this.collectSourceImages(prepared.analysesByParcel);
+      generated.push(...imageEntries);
     }
 
-    void archive.finalize();
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    if (generated.length === 1 && !dto.includeSourceImages) {
+      const file = generated[0];
+      return {
+        buffer: file.data,
+        filename: `cocoashield-export-${stamp}-${file.name}`,
+        contentType: this.contentType(file.name),
+      };
+    }
 
     return {
-      filename: `cocoashield-export-${new Date().toISOString().replace(/[:.]/g, '-')}.zip`,
-      archive,
-      scopeLabel: prepared.scopeLabel,
+      buffer: createZip(generated),
+      filename: `cocoashield-export-${stamp}.zip`,
+      contentType: 'application/zip',
     };
   }
 
-  private assertScopeIsComplete(dto: CreateExportDto): void {
-    const needsScopeId =
-      dto.scope === ExportScope.ZONE || dto.scope === ExportScope.MISSION;
-    if (needsScopeId && !dto.scopeId) {
-      throw new BadRequestException(
-        dto.scope === ExportScope.ZONE
-          ? 'Une zone doit être sélectionnée.'
-          : 'Une mission doit être sélectionnée.',
-      );
-    }
-    if (dto.scope === ExportScope.PERIOD && (!dto.dateFrom || !dto.dateTo)) {
-      throw new BadRequestException('Une période complète est requise.');
-    }
-  }
+  private async prepare(userId: string, dto: CreateExportDto): Promise<PreparedExport> {
+    const scope = await this.usersService.getAccessScope(userId);
+    const where = scope.isPlatformAdmin
+      ? undefined
+      : scope.organizationIds.length
+        ? [{ organizationId: In(scope.organizationIds) }, { ownerId: userId, organizationId: IsNull() }]
+        : [{ ownerId: userId }];
+    const parcels = await this.parcelRepository.find({
+      where,
+      relations: { analyses: { images: true, mission: true } },
+      order: { createdAt: 'DESC' },
+    });
 
-  /**
-   * Sélectionne les parcelles concernées **en base** : la portée, la
-   * propriété et le filtre « vérifiées uniquement » sont dans la requête,
-   * jamais appliqués après chargement.
-   */
-  private async prepare(
-    userId: string,
-    dto: CreateExportDto,
-  ): Promise<PreparedExport> {
-    const query = this.parcelRepository
-      .createQueryBuilder('parcel')
-      .leftJoinAndSelect('parcel.analyses', 'analysis')
-      .leftJoinAndSelect('analysis.mission', 'mission')
-      .where('parcel.owner_id = :userId', { userId })
-      .orderBy('parcel.created_at', 'DESC')
-      .take(MAX_EXPORTED_PARCELS);
-
-    if (dto.verifiedOnly) {
-      query.andWhere('parcel.terrain_verification_status = :verified', {
-        verified: TerrainVerificationStatus.VERIFIED,
-      });
-    }
-
+    const analysesByParcel = new Map<string, Analysis[]>();
     let scopeLabel = '';
-    if (dto.scope === ExportScope.ZONE) {
-      query.andWhere('parcel.id = :scopeId', { scopeId: dto.scopeId });
-    } else if (dto.scope === ExportScope.MISSION) {
-      query.andWhere('analysis.mission_id = :scopeId', {
-        scopeId: dto.scopeId,
-      });
-    } else {
-      query.andWhere(
-        'COALESCE(mission.mission_date, analysis.created_at) BETWEEN :from AND :to',
-        {
-          from: new Date(`${dto.dateFrom}T00:00:00.000Z`),
-          to: new Date(`${dto.dateTo}T23:59:59.999Z`),
-        },
-      );
-      scopeLabel = `${dto.dateFrom} → ${dto.dateTo}`;
-    }
 
-    const parcels = await query.getMany();
-    if (parcels.length === 0) {
-      return { features: [], parcelIds: [], scopeLabel };
-    }
+    const selected = parcels.filter((parcel) => {
+      if (
+        dto.verifiedOnly &&
+        parcel.terrainVerificationStatus !== TerrainVerificationStatus.VERIFIED
+      ) {
+        return false;
+      }
 
-    if (dto.scope === ExportScope.ZONE) {
-      scopeLabel = parcels[0].name;
-    } else if (dto.scope === ExportScope.MISSION) {
-      scopeLabel =
-        parcels[0].analyses?.[0]?.mission?.name ?? `Mission ${dto.scopeId}`;
-    }
+      let analyses = parcel.analyses ?? [];
+      if (dto.scope === ExportScope.ZONE) {
+        const [analysisId] = String(dto.scopeId).split(':');
+        analyses = analyses.filter((analysis) => analysis.id === analysisId);
+        if (analyses.length === 0) return false;
+        scopeLabel = `${parcel.name} · zone sélectionnée`;
+      } else if (dto.scope === ExportScope.MISSION) {
+        analyses = analyses.filter((analysis) => analysis.missionId === dto.scopeId);
+        if (analyses.length === 0) return false;
+        scopeLabel = analyses[0]?.mission?.name ?? `Mission ${dto.scopeId}`;
+      } else {
+        const from = new Date(`${dto.dateFrom}T00:00:00.000Z`);
+        const to = new Date(`${dto.dateTo}T23:59:59.999Z`);
+        analyses = analyses.filter((analysis) => {
+          const date = analysis.mission?.missionDate
+            ? new Date(analysis.mission.missionDate)
+            : new Date(analysis.createdAt);
+          return date >= from && date <= to;
+        });
+        if (analyses.length === 0) return false;
+        scopeLabel = `${dto.dateFrom} → ${dto.dateTo}`;
+      }
+      analysesByParcel.set(parcel.id, analyses);
+      return true;
+    });
 
-    const parcelIds = parcels.map((parcel) => parcel.id);
-    const metrics = await this.loadMetrics(parcelIds);
+    const features = selected.flatMap((parcel): ExportFeature[] => {
+      const analyses = analysesByParcel.get(parcel.id) ?? [];
+      const zoneTarget = dto.scope === ExportScope.ZONE ? String(dto.scopeId).split(':') : null;
+      const zoneFeatures: ExportFeature[] = [];
 
-    const features = parcels.map((parcel): ExportFeature => {
-      const parcelMetrics = metrics.get(parcel.id);
-      const processed = parcelMetrics?.processedCount ?? 0;
-      const infected = parcelMetrics?.infectedCount ?? 0;
-      const missions = Array.from(
-        new Set(
-          (parcel.analyses ?? [])
-            .map((analysis) => analysis.mission?.name)
-            .filter((name): name is string => Boolean(name)),
-        ),
-      );
+      for (const analysis of analyses) {
+        const zones = analysis.affectedZones ?? [];
+        zones.forEach((zone, index) => {
+          if (zoneTarget && (analysis.id !== zoneTarget[0] || String(index) !== zoneTarget[1])) return;
+          const geometry = zone.geometry ?? pointBufferBoundary(zone.longitude, zone.latitude);
+          const date = zone.lastDetectionAt ?? analysis.completedAt?.toISOString?.() ?? analysis.createdAt?.toISOString?.() ?? '';
+          const infectionRate = Math.max(0, Math.min(1, zone.infectionRate ?? zone.severity ?? 0));
+          const count = zone.diagnosticCount ?? 0;
+          zoneFeatures.push({
+            type: 'Feature',
+            geometry,
+            properties: {
+              parcel_id: parcel.id,
+              name: `${parcel.name} - zone ${index + 1}`,
+              status: parcel.status,
+              verification: parcel.terrainVerificationStatus,
+              verified_at: parcel.terrainVerifiedAt?.toISOString?.() ?? '',
+              area_ha: Number(((zone.surfaceSquareMeters ?? polygonAreaHa(geometry) * 10_000) / 10_000).toFixed(4)),
+              infection_rate: Number((infectionRate * 100).toFixed(2)),
+              image_count: count,
+              infected_images: Math.round(count * infectionRate),
+              missions: analysis.mission?.name ?? '',
+              severity: zone.severityLevel ?? analysis.severityLevel ?? '',
+              detection_date: date,
+              zone_status: zone.zoneStatus ?? 'active',
+            },
+          });
+        });
+      }
 
-      return {
+      if (zoneFeatures.length > 0 || dto.scope === ExportScope.ZONE) return zoneFeatures;
+
+      // Compatibilité avec les anciennes analyses qui ne possèdent pas encore de zones agrégées.
+      const images = analyses.flatMap((analysis) => analysis.images ?? []);
+      const processed = images.filter((image) => image.status === 'processed');
+      const infected = processed.filter((image) => image.result === 'infected');
+      const latest = analyses[0];
+      return [{
         type: 'Feature',
         geometry: parcel.boundary,
         properties: {
@@ -259,133 +284,69 @@ export class ExportsService {
           name: parcel.name,
           status: parcel.status,
           verification: parcel.terrainVerificationStatus,
-          verified_at: parcel.terrainVerifiedAt?.toISOString() ?? '',
+          verified_at: parcel.terrainVerifiedAt?.toISOString?.() ?? '',
           area_ha: Number(polygonAreaHa(parcel.boundary).toFixed(4)),
-          infection_rate:
-            processed > 0
-              ? Number(((infected / processed) * 100).toFixed(2))
-              : 0,
-          image_count: parcelMetrics?.imageCount ?? 0,
-          infected_images: infected,
-          missions: missions.join(' | '),
+          infection_rate: processed.length > 0 ? Number(((infected.length / processed.length) * 100).toFixed(2)) : 0,
+          image_count: images.length,
+          infected_images: infected.length,
+          missions: Array.from(new Set(analyses.map((analysis) => analysis.mission?.name).filter((value): value is string => Boolean(value)))).join(' | '),
+          severity: latest?.severityLevel ?? '',
+          detection_date: latest?.completedAt?.toISOString?.() ?? latest?.createdAt?.toISOString?.() ?? '',
+          zone_status: '',
         },
-      };
+      }];
     });
 
-    return { features, parcelIds, scopeLabel };
+    return { features, analysesByParcel, scopeLabel };
   }
 
-  /** Compte les images par parcelle en SQL, sans hydrater chaque ligne. */
-  private async loadMetrics(
-    parcelIds: string[],
-  ): Promise<Map<string, ParcelMetrics>> {
-    const rows = await this.parcelRepository.manager
-      .createQueryBuilder()
-      .select('analysis.parcel_id', 'parcelId')
-      .addSelect('COUNT(image.id)', 'imageCount')
-      .addSelect(
-        `COUNT(image.id) FILTER (WHERE image.status = :processed)`,
-        'processedCount',
-      )
-      .addSelect(
-        `COUNT(image.id) FILTER (WHERE image.result = :infected)`,
-        'infectedCount',
-      )
-      .from('analysis_image', 'image')
-      .innerJoin('analysis', 'analysis', 'analysis.id = image.analysis_id')
-      .where('analysis.parcel_id IN (:...parcelIds)', { parcelIds })
-      .setParameters({
-        processed: AnalysisImageStatus.PROCESSED,
-        infected: AnalysisResult.INFECTED,
-      })
-      .groupBy('analysis.parcel_id')
-      .getRawMany<{
-        parcelId: string;
-        imageCount: string;
-        processedCount: string;
-        infectedCount: string;
-      }>();
-
-    return new Map(
-      rows.map((row) => [
-        row.parcelId,
-        {
-          parcelId: row.parcelId,
-          imageCount: Number(row.imageCount),
-          processedCount: Number(row.processedCount),
-          infectedCount: Number(row.infectedCount),
-        },
-      ]),
-    );
-  }
-
-  private async appendFormat(
-    archive: Archiver,
-    format: ExportFormat,
-    prepared: PreparedExport,
-  ): Promise<void> {
+  private generateFormat(format: ExportFormat, prepared: PreparedExport): ArchiveEntry {
     switch (format) {
       case ExportFormat.GEOJSON:
-        archive.append(
-          JSON.stringify(
-            { type: 'FeatureCollection', features: prepared.features },
-            null,
-            2,
+        return {
+          name: 'zones.geojson',
+          data: Buffer.from(
+            JSON.stringify(
+              { type: 'FeatureCollection', features: prepared.features },
+              null,
+              2,
+            ),
           ),
-          { name: 'zones.geojson' },
-        );
-        return;
-
-      case ExportFormat.CSV:
-        archive.append(this.csv(prepared.features), { name: 'zones.csv' });
-        return;
-
-      case ExportFormat.KML_KMZ:
-        archive.append(this.kml(prepared.features), { name: 'zones.kml' });
-        return;
-
-      case ExportFormat.PDF:
-        archive.append(this.pdf(prepared), { name: 'rapport.pdf' });
-        return;
-
+        };
       case ExportFormat.SHAPEFILE:
-        archive.append(await this.shapefile(prepared.features), {
+        return {
           name: 'zones-shapefile.zip',
-        });
-        return;
+          data: createShapefileZip(
+            prepared.features.map((feature) => ({
+              coordinates: feature.geometry.coordinates[0],
+              properties: feature.properties,
+            })),
+          ),
+        };
+      case ExportFormat.KML_KMZ: {
+        const kml = this.kml(prepared.features);
+        return {
+          name: 'zones.kmz',
+          data: createZip([{ name: 'doc.kml', data: Buffer.from(kml) }]),
+        };
+      }
+      case ExportFormat.CSV:
+        return { name: 'zones.csv', data: Buffer.from(this.csv(prepared.features), 'utf8') };
+      case ExportFormat.PDF:
+        return {
+          name: 'rapport.pdf',
+          data: createSimplePdf('Cocoashield - Export phytosanitaire', [
+            `Portée : ${prepared.scopeLabel}`,
+            `Zones exportées : ${prepared.features.length}`,
+            ...prepared.features.flatMap((feature) => [
+              `${feature.properties.name} — ${feature.properties.area_ha} ha`,
+              `Taux infection : ${feature.properties.infection_rate}% — Sévérité : ${feature.properties.severity || "—"} — Images : ${feature.properties.image_count}`,
+              `Dernière détection : ${feature.properties.detection_date || "—"} — Vérification : ${feature.properties.verification}`,
+            ]),
+            'Mention : non-garantie diagnostique.',
+          ]),
+        };
     }
-  }
-
-  private pdf(prepared: PreparedExport) {
-    return createReportPdf(
-      'Cocoashield — Export phytosanitaire',
-      `Portée : ${prepared.scopeLabel} · ${prepared.features.length} zone(s)`,
-      prepared.features.map((feature) => ({
-        title: feature.properties.name,
-        lines: [
-          `Surface : ${feature.properties.area_ha} ha`,
-          `Taux d'infection : ${feature.properties.infection_rate} %`,
-          `Images analysées : ${feature.properties.image_count} (dont ${feature.properties.infected_images} infectées)`,
-          `Vérification terrain : ${feature.properties.verification}`,
-          feature.properties.missions
-            ? `Missions : ${feature.properties.missions}`
-            : 'Missions : —',
-        ],
-      })),
-    );
-  }
-
-  /**
-   * Génère un Shapefile via `@mapbox/shp-write` plutôt qu'une écriture
-   * binaire maison : la spécification (`.shp`, `.shx`, `.dbf`, encodage des
-   * attributs) est portée par la librairie.
-   */
-  private async shapefile(features: ExportFeature[]): Promise<Buffer> {
-    const { zip } = (await import('@mapbox/shp-write')) as {
-      zip: (geojson: unknown) => string | Promise<string>;
-    };
-    const base64 = await zip({ type: 'FeatureCollection', features });
-    return Buffer.from(base64, 'base64');
   }
 
   private csv(features: ExportFeature[]): string {
@@ -400,70 +361,77 @@ export class ExportsService {
       'image_count',
       'infected_images',
       'missions',
+      'severity',
+      'detection_date',
+      'zone_status',
       'geometry_geojson',
     ];
     const rows = features.map((feature) =>
       [
-        ...headers
-          .slice(0, -1)
-          .map(
-            (header) =>
-              feature.properties[header as keyof ExportFeature['properties']],
-          ),
+        feature.properties.parcel_id,
+        feature.properties.name,
+        feature.properties.status,
+        feature.properties.verification,
+        feature.properties.verified_at,
+        feature.properties.area_ha,
+        feature.properties.infection_rate,
+        feature.properties.image_count,
+        feature.properties.infected_images,
+        feature.properties.missions,
+        feature.properties.severity,
+        feature.properties.detection_date,
+        feature.properties.zone_status,
         JSON.stringify(feature.geometry),
       ]
         .map(csvCell)
         .join(','),
     );
-    // BOM UTF-8 : sans lui, Excel affiche les accents de travers.
     return `\uFEFF${headers.join(',')}\n${rows.join('\n')}\n`;
   }
 
   private kml(features: ExportFeature[]): string {
     const placemarks = features
       .map((feature) => {
-        const properties = feature.properties;
-        const extended = Object.entries(properties)
-          .map(
-            ([key, value]) =>
-              `<Data name="${xmlEscape(key)}"><value>${xmlEscape(value)}</value></Data>`,
-          )
+        const props = feature.properties;
+        const extended = Object.entries(props)
+          .map(([key, value]) => `<Data name="${xml(key)}"><value>${xml(value)}</value></Data>`)
           .join('');
         const coordinates = feature.geometry.coordinates[0]
           .map(([lng, lat]) => `${lng},${lat},0`)
           .join(' ');
-        return `<Placemark><name>${xmlEscape(properties.name)}</name><ExtendedData>${extended}</ExtendedData><Polygon><outerBoundaryIs><LinearRing><coordinates>${coordinates}</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark>`;
+        return `<Placemark><name>${xml(props.name)}</name><ExtendedData>${extended}</ExtendedData><Polygon><outerBoundaryIs><LinearRing><coordinates>${coordinates}</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark>`;
       })
       .join('');
     return `<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>Cocoashield</name>${placemarks}</Document></kml>`;
   }
 
-  /** Ajoute les images sources en flux, une par une. */
-  private async appendSourceImages(
-    archive: Archiver,
-    parcelIds: string[],
-  ): Promise<void> {
-    const rows = await this.parcelRepository.manager
-      .createQueryBuilder()
-      .select('DISTINCT image.file_path', 'filePath')
-      .from('analysis_image', 'image')
-      .innerJoin('analysis', 'analysis', 'analysis.id = image.analysis_id')
-      .where('analysis.parcel_id IN (:...parcelIds)', { parcelIds })
-      .andWhere('image.file_path IS NOT NULL')
-      .getRawMany<{ filePath: string }>();
-
-    for (const { filePath } of rows) {
-      const absolutePath = path.join(this.configService.uploadsDir, filePath);
-      try {
-        await access(absolutePath);
-      } catch {
-        // Un fichier source manquant ne rend pas les données SIG inutilisables.
-        this.logger.warn(`Image source introuvable, ignorée : ${filePath}`);
-        continue;
+  private async collectSourceImages(
+    analysesByParcel: Map<string, Analysis[]>,
+  ): Promise<ArchiveEntry[]> {
+    const entries: ArchiveEntry[] = [];
+    const seen = new Set<string>();
+    for (const analyses of analysesByParcel.values()) {
+      for (const image of analyses.flatMap((analysis) => analysis.images ?? [])) {
+        if (!image.filePath || seen.has(image.filePath)) continue;
+        seen.add(image.filePath);
+        try {
+          const data = await fs.readFile(
+            path.join(this.configService.uploadsDir, image.filePath),
+          );
+          entries.push({ name: `images-sources/${image.filePath}`, data });
+        } catch {
+          // Un fichier source manquant ne rend pas les données SIG inutilisables.
+        }
       }
-      archive.append(createReadStream(absolutePath), {
-        name: `images-sources/${filePath}`,
-      });
     }
+    return entries;
+  }
+
+  private contentType(filename: string): string {
+    if (filename.endsWith('.geojson')) return 'application/geo+json';
+    if (filename.endsWith('.csv')) return 'text/csv; charset=utf-8';
+    if (filename.endsWith('.pdf')) return 'application/pdf';
+    if (filename.endsWith('.kmz')) return 'application/vnd.google-earth.kmz';
+    return 'application/zip';
   }
 }

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 
 import Spinner from "@/components/ui/Spinner";
 import { useAuth } from "@/context/AuthContext";
-import { defaultPathForRole } from "@/lib/access-control";
+import { defaultPathForProfile } from "@/lib/access-control";
 import { userService } from "@/services/user-service";
 
 export default function Home() {
@@ -18,15 +18,10 @@ export default function Home() {
       router.replace("/login");
       return;
     }
-    userService
-      .me()
-      .then((profile) => router.replace(defaultPathForRole(profile.role)))
+    userService.me()
+      .then((profile) => router.replace(defaultPathForProfile(profile)))
       .catch(() => router.replace("/login"));
   }, [isInitializing, user, router]);
 
-  return (
-    <main className="flex min-h-screen items-center justify-center bg-[#F6F8F3]">
-      <Spinner label="Ouverture de votre espace..." />
-    </main>
-  );
+  return <main className="flex min-h-screen items-center justify-center bg-[#F6F8F3]"><Spinner label="Ouverture de votre espace..." /></main>;
 }

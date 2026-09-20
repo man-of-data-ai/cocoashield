@@ -1,0 +1,79 @@
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: cocoashield
+      POSTGRES_PASSWORD: cocoashield
+      POSTGRES_DB: cocoashield
+    ports:
+      - "5432:5432"
+    volumes:
+      - onprem_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cocoashield -d cocoashield"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - onprem_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  back:
+    build:
+      context: ./back
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      APP_NAME: cocoashield-onpremise
+      PORT: 3000
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_NAME: cocoashield
+      DATABASE_USERNAME: cocoashield
+      DATABASE_PASSWORD: cocoashield
+      BETTER_AUTH_SECRET: cocoashield-demo-onpremise-change-me
+      BETTER_AUTH_URL: http://localhost:3000
+      WEB_URL: http://localhost:3002
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      UPLOADS_DIR: /app/uploads
+      DEMO_INFERENCE_MODE: "true"
+    ports:
+      - "3000:3000"
+    volumes:
+      - onprem_uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: ["sh", "-c", "npm run auth:migrate && npm run start:prod"]
+
+  web:
+    build:
+      context: ./web
+      args:
+        BACKEND_URL: http://back:3000
+    restart: unless-stopped
+    environment:
+      BACKEND_URL: http://back:3000
+    ports:
+      - "3002:3002"
+    depends_on:
+      - back
+
+volumes:
+  onprem_postgres_data:
+  onprem_redis_data:
+  onprem_uploads:

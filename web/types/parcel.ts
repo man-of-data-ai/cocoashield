@@ -1,17 +1,17 @@
+
 export type ParcelStatus = "not_analyzed" | "analyzing" | "sick" | "healthy";
 
-export type TerrainVerificationStatus =
-  "pending" | "verified" | "false_positive";
+export type TerrainVerificationStatus = "pending" | "verified" | "false_positive";
 
 export type AnalysisStatus = "pending" | "processing" | "completed";
 
 export type AnalysisResult = "healthy" | "infected";
 
-export type AnalysisImageSource = "mobile" | "upload";
+export type AnalysisImageSource = "mobile" | "upload" | "drone" | "robot";
 
 export type AnalysisImageStatus = "pending" | "processed" | "failed";
 
-export type GeolocationQuality = "precise" | "approximate" | "none";
+export type GeolocationQuality = "rtk_fix" | "rtk_float" | "gnss_seul" | "saisie_manuelle" | "precise" | "approximate" | "none";
 
 export type ParcelBoundary = {
   type: "Polygon";
@@ -29,14 +29,24 @@ export type AnalysisImage = {
   latitude: number | null;
   longitude: number | null;
   geolocationQuality: GeolocationQuality;
+  altitudeM?: number | null;
+  gimbalYaw?: number | null;
+  gimbalPitch?: number | null;
+  gimbalRoll?: number | null;
+  captureTimestamp?: string | null;
+  geolocationPrecisionM?: number | null;
 };
 
 export type Mission = {
   id: string;
   createdAt: string;
   ownerId: string;
+  organizationId?: string | null;
+  organizationName?: string | null;
   name: string;
-  missionDate: string | null;
+  missionDate: string;
+  droneProfileId: string;
+  parcelIds: string[];
   notes: string | null;
 };
 
@@ -57,6 +67,12 @@ export type Analysis = {
     severityLevel?: "faible" | "modere" | "eleve" | "critique";
     surfaceSquareMeters?: number | null;
     geometry?: ParcelBoundary | null;
+    infectionRate?: number;
+    diagnosticCount?: number;
+    averageConfidence?: number | null;
+    lastDetectionAt?: string | null;
+    zoneStatus?: "active" | "known" | "regression";
+    sourceImageIds?: string[];
   }> | null;
   reportGeneratedAt: string | null;
   images: AnalysisImage[];
@@ -70,7 +86,12 @@ export type Parcel = {
   id: string;
   createdAt: string;
   ownerId: string;
+  organizationId?: string | null;
+  organizationName?: string | null;
   name: string;
+  producerName: string | null;
+  producerEmail: string | null;
+  producerPhone: string | null;
   boundary: ParcelBoundary;
   status: ParcelStatus;
   terrainVerificationStatus: TerrainVerificationStatus;

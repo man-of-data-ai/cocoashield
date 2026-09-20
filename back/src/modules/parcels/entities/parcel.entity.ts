@@ -26,8 +26,16 @@ export class Parcel extends RestEntity {
   @Column({ name: 'owner_id' })
   ownerId: string;
 
+  @Index()
+  @Column({ name: 'organization_id', type: 'varchar', nullable: true })
+  organizationId: string | null;
+
   @Column()
   name: string;
+
+  @Column({ name:'producer_name', type:'varchar', nullable:true }) producerName: string | null;
+  @Column({ name:'producer_email', type:'varchar', nullable:true }) producerEmail: string | null;
+  @Column({ name:'producer_phone', type:'varchar', nullable:true }) producerPhone: string | null;
 
   @Column({
     type: 'geometry',
@@ -43,6 +51,7 @@ export class Parcel extends RestEntity {
   })
   status: ParcelStatus;
 
+
   @Column({
     name: 'terrain_verification_status',
     type: 'enum',
@@ -51,11 +60,7 @@ export class Parcel extends RestEntity {
   })
   terrainVerificationStatus: TerrainVerificationStatus;
 
-  @Column({
-    name: 'terrain_verification_comment',
-    type: 'text',
-    nullable: true,
-  })
+  @Column({ name: 'terrain_verification_comment', type: 'text', nullable: true })
   terrainVerificationComment: string | null;
 
   @Column({ name: 'terrain_verified_at', type: 'timestamptz', nullable: true })
@@ -63,4 +68,6 @@ export class Parcel extends RestEntity {
 
   @OneToMany(() => Analysis, (analysis) => analysis.parcel)
   analyses: Analysis[];
+
+
 }

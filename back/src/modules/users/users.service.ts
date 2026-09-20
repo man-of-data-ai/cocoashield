@@ -1,252 +1,234 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
-import { UpdateUserProfileDto } from './dtos/update-user-profile.dto';
-import {
-  UserProfile,
-  UserRole,
-  UserStatus,
-} from './entities/user-profile.entity';
+import { DataSource, In, Repository } from 'typeorm';
+import { hashPassword as betterAuthHashPassword, verifyPassword as betterAuthVerifyPassword } from 'better-auth/crypto';
+import { Organization, ServiceOffer } from '../organizations/entities/organization.entity';
+import { UpdateOwnAccountDto, UpdateUserProfileDto } from './dtos/update-user-profile.dto';
+import { AdminOrganization } from './entities/admin-organization.entity';
+import { UserProfile, UserRole, UserStatus } from './entities/user-profile.entity';
 
-/** Compte better-auth, tel que stocké par la librairie. */
-type AuthUserRow = {
-  id: string;
-  name: string;
-  email: string;
-  username: string | null;
-  createdAt: Date;
+const AUTONOMOUS_ADMIN_OFFERS = new Set<ServiceOffer>([ServiceOffer.SAAS_BYOD, ServiceOffer.ON_PREMISE]);
+
+export type UserAccessScope = {
+  userId: string;
+  role: UserRole;
+  isPlatformAdmin: boolean;
+  organizationIds: string[];
+  primaryOrganizationId: string | null;
 };
-
-const AUTH_USER_COLUMNS = `id, name, email, username, "createdAt"`;
-
-/** Profil implicite d'un compte qui n'a pas encore de ligne applicative. */
-const IMPLICIT_PROFILE = {
-  role: UserRole.AGRONOME_TERRAIN,
-  cooperative: null,
-  status: UserStatus.ACTIVE,
-} as const;
 
 @Injectable()
 export class UsersService {
   constructor(
-    @InjectRepository(UserProfile)
-    private readonly profiles: Repository<UserProfile>,
+    @InjectRepository(UserProfile) private readonly profiles: Repository<UserProfile>,
+    @InjectRepository(AdminOrganization) private readonly assignments: Repository<AdminOrganization>,
+    @InjectRepository(Organization) private readonly organizations: Repository<Organization>,
     private readonly dataSource: DataSource,
   ) {}
 
-  /**
-   * Crée le profil applicatif d'un compte. Appelé à l'inscription et par le
-   * seed — jamais depuis une lecture.
-   *
-   * `orIgnore()` rend l'appel idempotent et sûr en concurrence : deux
-   * inscriptions simultanées ne violent pas la contrainte d'unicité.
-   */
-  async createProfile(userId: string): Promise<UserProfile> {
-    await this.profiles
-      .createQueryBuilder()
-      .insert()
-      .values({ userId, ...IMPLICIT_PROFILE })
-      .orIgnore()
-      .execute();
-    return this.profiles.findOneOrFail({ where: { userId } });
+  async ensureProfile(userId: string): Promise<UserProfile> {
+    let profile = await this.profiles.findOne({ where: { userId } });
+    if (!profile) profile = await this.profiles.save(this.profiles.create({ userId, role: UserRole.AGRONOME_TERRAIN, cooperative: 'Cocoashield', status: UserStatus.ACTIVE, isPlatformAdmin: false }));
+    return profile;
   }
 
-  /**
-   * Lecture seule du profil, sans jamais écrire.
-   *
-   * `withDeleted` est indispensable ici : sans lui, un profil soft-deleted
-   * serait introuvable et retomberait sur le profil implicite — un compte
-   * supprimé récupérerait donc un rôle actif. Le `deletedAt` est renvoyé pour
-   * que l'appelant puisse refuser explicitement.
-   */
-  async resolveProfile(
-    userId: string,
-  ): Promise<
-    Pick<UserProfile, 'role' | 'cooperative' | 'status' | 'deletedAt'>
-  > {
-    const profile = await this.profiles.findOne({
-      where: { userId },
-      withDeleted: true,
-    });
-    return profile ?? { ...IMPLICIT_PROFILE, deletedAt: null };
+  private async promoteLegacyPlatformAdmin(profile: UserProfile): Promise<UserProfile> {
+    if (profile.isPlatformAdmin || profile.role !== UserRole.ADMINISTRATEUR || profile.cooperative !== 'Cocoashield') return profile;
+    const rows = await this.dataSource.query(`SELECT email FROM "user" WHERE id = $1 LIMIT 1`, [profile.userId]);
+    if (rows[0]?.email === 'admin@cocoashield.local') {
+      profile.isPlatformAdmin = true;
+      return this.profiles.save(profile);
+    }
+    return profile;
   }
 
-  /** Un compte supprimé ne peut plus ni se connecter ni utiliser l'API. */
-  async isDeleted(userId: string): Promise<boolean> {
-    const profile = await this.resolveProfile(userId);
-    return profile.deletedAt !== null;
+  private async managedOrganizationIds(profile: UserProfile): Promise<string[]> {
+    if (profile.isPlatformAdmin) return (await this.organizations.find({ select: { id: true } })).map((org) => org.id);
+    if (profile.role !== UserRole.ADMINISTRATEUR) return profile.organizationId ? [profile.organizationId] : [];
+    const links = await this.assignments.find({ where: { userId: profile.userId } });
+    const ids = links.map((link) => link.organizationId);
+    if (!ids.length && profile.organizationId) ids.push(profile.organizationId);
+    return [...new Set(ids)];
   }
 
-  /** Profil de l'utilisateur connecté, projeté sur les seuls champs utiles. */
+  async getAccessScope(userId: string): Promise<UserAccessScope> {
+    const profile = await this.promoteLegacyPlatformAdmin(await this.ensureProfile(userId));
+    if (profile.status !== UserStatus.ACTIVE) throw new ForbiddenException('Inactive account');
+    return {
+      userId,
+      role: profile.role,
+      isPlatformAdmin: profile.isPlatformAdmin,
+      organizationIds: await this.managedOrganizationIds(profile),
+      primaryOrganizationId: profile.organizationId,
+    };
+  }
+
   async current(userId: string) {
-    const { role, cooperative, status } = await this.resolveProfile(userId);
-    return { role, cooperative, status };
+    const profile = await this.promoteLegacyPlatformAdmin(await this.ensureProfile(userId));
+    const rows = await this.dataSource.query(`SELECT id, name, email, username FROM "user" WHERE id = $1 LIMIT 1`, [userId]);
+    const organization = profile.organizationId ? await this.organizations.findOne({ where: { id: profile.organizationId } }) : null;
+    return {
+      ...rows[0],
+      role: profile.role,
+      cooperative: profile.cooperative,
+      organizationId: profile.organizationId,
+      defaultParcelId: profile.defaultParcelId,
+      organizationOffer: organization?.offer ?? null,
+      status: profile.status,
+      isPlatformAdmin: profile.isPlatformAdmin,
+      managedOrganizationIds: await this.managedOrganizationIds(profile),
+    };
   }
 
-  /**
-   * Liste des comptes. Les comptes supprimés ne sont renvoyés que sur demande
-   * explicite (`includeDeleted`), pour permettre leur restauration.
-   */
-  async list(includeDeleted = false) {
-    const users = await this.dataSource.query<AuthUserRow[]>(
-      `SELECT ${AUTH_USER_COLUMNS} FROM "user" ORDER BY "createdAt" DESC`,
-    );
-    const profiles = await this.profiles.find({ withDeleted: true });
-    const byUserId = new Map(
-      profiles.map((profile) => [profile.userId, profile]),
-    );
-
-    return users
-      .map((user) => {
-        const profile = byUserId.get(user.id) ?? {
-          ...IMPLICIT_PROFILE,
-          deletedAt: null,
-        };
-        return {
-          ...user,
-          role: profile.role,
-          cooperative: profile.cooperative,
-          status: profile.status,
-          deletedAt: profile.deletedAt,
-        };
-      })
-      .filter((user) => includeDeleted || user.deletedAt === null);
+  private async requireAdmin(userId: string): Promise<UserProfile> {
+    const profile = await this.promoteLegacyPlatformAdmin(await this.ensureProfile(userId));
+    if (profile.role !== UserRole.ADMINISTRATEUR || profile.status !== UserStatus.ACTIVE) throw new ForbiddenException('Administrator access required');
+    return profile;
   }
 
-  /**
-   * Empêche de retirer le dernier administrateur actif de la plateforme, que
-   * ce soit par changement de rôle, désactivation ou suppression.
-   */
-  private async assertAdminContinuity(
-    targetUserId: string,
-    nextRole?: UserRole,
-    nextStatus?: UserStatus,
-  ): Promise<void> {
-    const target = await this.resolveProfile(targetUserId);
-    const staysActiveAdmin =
-      (nextRole ?? target.role) === UserRole.ADMINISTRATEUR &&
-      (nextStatus ?? target.status) === UserStatus.ACTIVE;
+  private async listUsers() {
+    const users: Array<{ id: string; name: string; email: string; username?: string | null; createdAt?: Date }> = await this.dataSource.query(`SELECT id, name, email, username, "createdAt" FROM "user" ORDER BY "createdAt" DESC`);
+    const profiles = await this.profiles.find();
+    const map = new Map(profiles.map((profile) => [profile.userId, profile]));
+    return Promise.all(users.map(async (user) => {
+      const profile = await this.promoteLegacyPlatformAdmin(map.get(user.id) ?? await this.ensureProfile(user.id));
+      return { ...user, role: profile.role, cooperative: profile.cooperative, organizationId: profile.organizationId, defaultParcelId: profile.defaultParcelId, status: profile.status, isPlatformAdmin: profile.isPlatformAdmin, managedOrganizationIds: await this.managedOrganizationIds(profile) };
+    }));
+  }
 
-    if (target.role !== UserRole.ADMINISTRATEUR || staysActiveAdmin) {
-      return;
-    }
+  async listForAdmin(actorId: string) {
+    const actor = await this.requireAdmin(actorId);
+    const users = await this.listUsers();
+    if (actor.isPlatformAdmin) return users;
+    const allowed = new Set(await this.managedOrganizationIds(actor));
+    return users.filter((user) => !user.isPlatformAdmin && (Boolean(user.organizationId && allowed.has(user.organizationId)) || user.managedOrganizationIds.some((id) => allowed.has(id))));
+  }
 
-    const activeAdmins = await this.profiles.count({
-      where: { role: UserRole.ADMINISTRATEUR, status: UserStatus.ACTIVE },
-    });
-    if (activeAdmins <= 1) {
-      throw new BadRequestException(
-        'Au moins un administrateur actif doit être conservé.',
-      );
+  async visibleUserIdsForActor(actorId: string): Promise<string[]> {
+    const actor = await this.ensureProfile(actorId);
+    if (actor.role === UserRole.ADMINISTRATEUR) return (await this.listForAdmin(actorId)).map((user) => user.id);
+    const scope = await this.getAccessScope(actorId);
+    const users = await this.listUsers();
+    const allowed = new Set(scope.organizationIds);
+    return users.filter((user) => !user.isPlatformAdmin && (user.id === actorId || Boolean(user.organizationId && allowed.has(user.organizationId)))).map((user) => user.id);
+  }
+
+  private async assertOrganizationsAllowed(actor: UserProfile, organizationIds: string[]) {
+    if (actor.isPlatformAdmin) return;
+    const allowed = new Set(await this.managedOrganizationIds(actor));
+    if (organizationIds.some((id) => !allowed.has(id))) throw new ForbiddenException('You cannot manage users outside your organizations');
+  }
+
+  private async assertAutonomousAdminAllowed(organizationIds: string[]) {
+    if (!organizationIds.length) throw new BadRequestException('An organization administrator must be attached to at least one organization');
+    const orgs = await this.organizations.find({ where: { id: In(organizationIds) } });
+    if (orgs.length !== organizationIds.length) throw new BadRequestException('Unknown organization');
+    const blocked = orgs.find((org) => !AUTONOMOUS_ADMIN_OFFERS.has(org.offer));
+    if (blocked) throw new BadRequestException(`The ${blocked.offer} offer does not allow autonomous client administration`);
+  }
+
+  private async assertAdminContinuity(targetUserId: string, nextRole?: UserRole) {
+    const target = await this.ensureProfile(targetUserId);
+    if (target.role !== UserRole.ADMINISTRATEUR || nextRole === UserRole.ADMINISTRATEUR) return;
+    const adminCount = await this.profiles.count({ where: { role: UserRole.ADMINISTRATEUR, status: UserStatus.ACTIVE } });
+    if (adminCount <= 1) throw new BadRequestException('At least one active administrator must remain');
+  }
+
+  private async saveManagedOrganizations(userId: string, ids: string[]) {
+    await this.assignments.delete({ userId });
+    if (ids.length) await this.assignments.save(ids.map((organizationId) => this.assignments.create({ userId, organizationId })));
+  }
+
+  private async updateIdentity(userId: string, input: { name?: string; email?: string }) {
+    if (input.name === undefined && input.email === undefined) return;
+    const fields: string[] = [];
+    const values: unknown[] = [];
+    if (input.name !== undefined) { fields.push(`name = $${values.length + 1}`); values.push(input.name.trim()); }
+    if (input.email !== undefined) { fields.push(`email = $${values.length + 1}`); values.push(input.email.trim().toLowerCase()); }
+    fields.push(`"updatedAt" = NOW()`);
+    values.push(userId);
+    try {
+      await this.dataSource.query(`UPDATE "user" SET ${fields.join(', ')} WHERE id = $${values.length}`, values);
+    } catch (error) {
+      throw new BadRequestException('Le nom ou l’adresse email ne peut pas être utilisé.');
     }
   }
 
-  private async findAuthUser(userId: string): Promise<AuthUserRow> {
-    const rows = await this.dataSource.query<AuthUserRow[]>(
-      `SELECT ${AUTH_USER_COLUMNS} FROM "user" WHERE id = $1 LIMIT 1`,
-      [userId],
-    );
-    if (!rows[0]) {
-      throw new NotFoundException('Utilisateur introuvable.');
-    }
-    return rows[0];
+  private async setPassword(userId: string, password: string, revokeSessions = true) {
+    const hashed = await betterAuthHashPassword(password);
+    const result = await this.dataSource.query(`UPDATE "account" SET password = $1, "updatedAt" = NOW() WHERE "userId" = $2 AND "providerId" = 'credential' RETURNING id`, [hashed, userId]);
+    if (!result[0]) throw new BadRequestException('Aucun compte avec mot de passe n’est associé à cet utilisateur.');
+    if (revokeSessions) await this.dataSource.query(`DELETE FROM "session" WHERE "userId" = $1`, [userId]).catch(() => undefined);
+  }
+
+  private async verifyPassword(userId: string, password: string): Promise<boolean> {
+    const rows = await this.dataSource.query(`SELECT password FROM "account" WHERE "userId" = $1 AND "providerId" = 'credential' LIMIT 1`, [userId]);
+    if (!rows[0]?.password) return false;
+    return betterAuthVerifyPassword({ password, hash: rows[0].password });
   }
 
   async update(userId: string, dto: UpdateUserProfileDto) {
-    const user = await this.findAuthUser(userId);
-    const profile = await this.createProfile(userId);
-    Object.assign(profile, dto);
-    const saved = await this.profiles.save(profile);
-    return {
-      ...user,
-      role: saved.role,
-      cooperative: saved.cooperative,
-      status: saved.status,
-    };
+    const exists = await this.dataSource.query(`SELECT id, name, email, username, "createdAt" FROM "user" WHERE id = $1 LIMIT 1`, [userId]);
+    if (!exists[0]) throw new NotFoundException('User not found');
+    const profile = await this.ensureProfile(userId);
+    const { managedOrganizationIds, name, email, password, ...profilePatch } = dto;
+    Object.assign(profile, profilePatch);
+    await this.profiles.save(profile);
+    if (managedOrganizationIds) await this.saveManagedOrganizations(userId, managedOrganizationIds);
+    await this.updateIdentity(userId, { name, email });
+    if (password) await this.setPassword(userId, password);
+    const fresh = await this.dataSource.query(`SELECT id, name, email, username, "createdAt" FROM "user" WHERE id = $1 LIMIT 1`, [userId]);
+    return { ...fresh[0], role: profile.role, cooperative: profile.cooperative, organizationId: profile.organizationId, defaultParcelId: profile.defaultParcelId, status: profile.status, isPlatformAdmin: profile.isPlatformAdmin, managedOrganizationIds: await this.managedOrganizationIds(profile) };
   }
 
-  async updateAsAdmin(
-    actorId: string,
-    userId: string,
-    dto: UpdateUserProfileDto,
-  ) {
-    if (
-      actorId === userId &&
-      dto.role &&
-      dto.role !== UserRole.ADMINISTRATEUR
-    ) {
-      throw new BadRequestException(
-        'Vous ne pouvez pas retirer votre propre rôle administrateur.',
-      );
+  async updateForAdmin(actorId: string, userId: string, dto: UpdateUserProfileDto) {
+    const actor = await this.requireAdmin(actorId);
+    const target = await this.ensureProfile(userId);
+    if (!actor.isPlatformAdmin && target.isPlatformAdmin) throw new ForbiddenException('The CocoaShield administrator cannot be managed by a client administrator');
+    if (!actor.isPlatformAdmin && dto.isPlatformAdmin) throw new ForbiddenException('Only a CocoaShield administrator can grant platform administrator access');
+    if (actorId === userId && dto.role && dto.role !== UserRole.ADMINISTRATEUR) throw new BadRequestException('You cannot remove your own administrator role');
+    if (actorId === userId && dto.status === UserStatus.INACTIVE) throw new BadRequestException('Vous ne pouvez pas désactiver votre propre compte.');
+    if (dto.role) await this.assertAdminContinuity(userId, dto.role);
+
+    const nextRole = dto.role ?? target.role;
+    const nextManaged = dto.managedOrganizationIds ?? await this.managedOrganizationIds(target);
+    const scopedIds = nextRole === UserRole.ADMINISTRATEUR ? nextManaged : (dto.organizationId ? [dto.organizationId] : target.organizationId ? [target.organizationId] : []);
+    await this.assertOrganizationsAllowed(actor, scopedIds);
+    if (nextRole === UserRole.ADMINISTRATEUR && !(dto.isPlatformAdmin ?? target.isPlatformAdmin)) await this.assertAutonomousAdminAllowed(nextManaged);
+    if (nextRole !== UserRole.ADMINISTRATEUR && dto.organizationId) {
+      const org = await this.organizations.findOne({ where: { id: dto.organizationId } });
+      if (!org) throw new BadRequestException('Unknown organization');
+      dto.cooperative = org.name;
     }
-    await this.assertAdminContinuity(userId, dto.role, dto.status);
     return this.update(userId, dto);
   }
 
-  /**
-   * Suppression réversible d'un compte.
-   *
-   * Le profil est soft-deleted et son statut passé à `inactive`. Le compte
-   * better-auth et ses écritures sont conservés : sans eux, le journal
-   * d'audit perdrait l'identité derrière chaque action passée.
-   *
-   * Les **sessions sont révoquées physiquement** : un jeton de session est un
-   * droit d'accès vivant, pas une donnée d'historique. Sans cette révocation,
-   * un compte supprimé resterait connecté jusqu'à expiration de son cookie.
-   */
-  async deleteAsAdmin(actorId: string, userId: string) {
-    if (actorId === userId) {
-      throw new BadRequestException(
-        'Vous ne pouvez pas supprimer votre propre compte.',
-      );
+  async updateOwnAccount(userId: string, dto: UpdateOwnAccountDto) {
+    if (dto.password) {
+      if (!dto.currentPassword) throw new BadRequestException('Le mot de passe actuel est requis.');
+      if (!await this.verifyPassword(userId, dto.currentPassword)) throw new BadRequestException('Le mot de passe actuel est incorrect.');
     }
-    await this.findAuthUser(userId);
-    if (await this.isDeleted(userId)) {
-      throw new BadRequestException('Ce compte est déjà supprimé.');
-    }
-    await this.assertAdminContinuity(userId, undefined, UserStatus.INACTIVE);
-
-    const profile = await this.createProfile(userId);
-    profile.status = UserStatus.INACTIVE;
-    await this.profiles.save(profile);
-
-    await this.dataSource.transaction(async (manager) => {
-      await manager.softDelete(UserProfile, { userId });
-      await manager.query(`DELETE FROM "session" WHERE "userId" = $1`, [
-        userId,
-      ]);
-    });
-
-    return { id: userId, deleted: true };
+    await this.updateIdentity(userId, { name: dto.name });
+    if (dto.password) await this.setPassword(userId, dto.password, false);
+    return this.current(userId);
   }
 
-  /** Réactive un compte précédemment supprimé. */
-  async restoreAsAdmin(userId: string) {
-    const user = await this.findAuthUser(userId);
-    const profile = await this.profiles.findOne({
-      where: { userId },
-      withDeleted: true,
+  async deleteForAdmin(actorId: string, userId: string) {
+    const actor = await this.requireAdmin(actorId);
+    if (actorId === userId) throw new BadRequestException('You cannot delete your own account');
+    const target = await this.ensureProfile(userId);
+    if (!actor.isPlatformAdmin && target.isPlatformAdmin) throw new ForbiddenException('The CocoaShield administrator cannot be managed by a client administrator');
+    await this.assertOrganizationsAllowed(actor, target.role === UserRole.ADMINISTRATEUR ? await this.managedOrganizationIds(target) : target.organizationId ? [target.organizationId] : []);
+    const exists = await this.dataSource.query(`SELECT id FROM "user" WHERE id = $1 LIMIT 1`, [userId]);
+    if (!exists[0]) throw new NotFoundException('User not found');
+    await this.assertAdminContinuity(userId, undefined);
+    await this.dataSource.transaction(async (manager) => {
+      await manager.query(`DELETE FROM admin_organization WHERE user_id = $1`, [userId]).catch(() => undefined);
+      await manager.query(`DELETE FROM app_user_profile WHERE user_id = $1`, [userId]);
+      await manager.query(`DELETE FROM "session" WHERE "userId" = $1`, [userId]).catch(() => undefined);
+      await manager.query(`DELETE FROM "account" WHERE "userId" = $1`, [userId]).catch(() => undefined);
+      await manager.query(`DELETE FROM "user" WHERE id = $1`, [userId]);
     });
-
-    if (!profile?.deletedAt) {
-      throw new BadRequestException("Ce compte n'est pas supprimé.");
-    }
-
-    await this.profiles.restore({ userId });
-    profile.deletedAt = null;
-    profile.status = UserStatus.ACTIVE;
-    const saved = await this.profiles.save(profile);
-
-    return {
-      ...user,
-      role: saved.role,
-      cooperative: saved.cooperative,
-      status: saved.status,
-      deletedAt: null,
-    };
+    return { id: userId, deleted: true };
   }
 }

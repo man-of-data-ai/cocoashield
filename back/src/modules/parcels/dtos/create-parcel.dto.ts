@@ -1,4 +1,4 @@
-import { ArrayMinSize, IsArray, IsString, MinLength } from 'class-validator';
+import { ArrayMinSize, IsArray, IsOptional, IsString, MinLength } from 'class-validator';
 
 export class CreateParcelDto {
   @IsString()
@@ -10,6 +10,10 @@ export class CreateParcelDto {
    * [longitude, latitude] pairs (GeoJSON order). The ring is closed
    * automatically if the first and last points differ.
    */
+  @IsOptional() @IsString() producerName?: string;
+  @IsOptional() @IsString() producerEmail?: string;
+  @IsOptional() @IsString() producerPhone?: string;
+
   @IsArray()
   @ArrayMinSize(3)
   coordinates: [number, number][];

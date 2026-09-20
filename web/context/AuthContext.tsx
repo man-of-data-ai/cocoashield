@@ -1,5 +1,6 @@
 "use client";
 
+
 import {
   createContext,
   useCallback,
@@ -106,9 +107,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 export function useAuth(): AuthContextValue {
   const context = useContext(AuthContext);
   if (!context) {
-    throw new Error(
-      "useAuth doit être utilisé à l'intérieur d'un AuthProvider.",
-    );
+    throw new Error("useAuth doit être utilisé à l'intérieur d'un AuthProvider.");
   }
   return context;
 }

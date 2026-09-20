@@ -14,4 +14,6 @@ export interface AnalysisImageMeta {
   source: AnalysisImageSource;
   result?: AnalysisResult;
   confidence?: number;
+  latitude?: number;
+  longitude?: number;
 }

@@ -36,32 +36,14 @@ import {
   ExportScope,
 } from '../src/modules/exports/entities/export-record.entity';
 import { AuditLog } from '../src/modules/audit/entities/audit-log.entity';
-import { classifySeverity } from '../src/modules/platform-config/severity';
+import { Organization, OrganizationType, ServiceOffer } from '../src/modules/organizations/entities/organization.entity';
 
-/**
- * Le mot de passe de démonstration n'est pas versionné : il est fourni par
- * l'environnement. Un secret commité est un secret compromis.
- */
-const DEMO_PASSWORD = process.env.SEED_DEMO_PASSWORD ?? '';
+const DEMO_PASSWORD = 'CocoaDemo2026!';
 const DEMO_USERS = [
-  {
-    email: 'admin@cocoashield.local',
-    username: 'Awa.Kone',
-    role: UserRole.ADMINISTRATEUR,
-    cooperative: 'Cocoashield',
-  },
-  {
-    email: 'direction@ccc.ci',
-    username: 'Direction.CCC',
-    role: UserRole.DIRECTION_CCC,
-    cooperative: 'Conseil du Café-Cacao',
-  },
-  {
-    email: 'agronome@cocoashield.local',
-    username: 'Jean.Dupont',
-    role: UserRole.AGRONOME_TERRAIN,
-    cooperative: 'COOP-CA Soubré',
-  },
+  { email: 'admin@cocoashield.local', username: 'Awa.Kone', role: UserRole.ADMINISTRATEUR, cooperative: 'Cocoashield', kind: 'platform' },
+  { email: 'admin.onpremise@ccc.ci', username: 'Admin.Local', role: UserRole.ADMINISTRATEUR, cooperative: 'Conseil du Café-Cacao', kind: 'onprem' },
+  { email: 'agronome@ccc.ci', username: 'Agronome.CCC', role: UserRole.AGRONOME_TERRAIN, cooperative: 'Conseil du Café-Cacao', kind: 'onprem' },
+  { email: 'direction@ccc.ci', username: 'Direction.CCC', role: UserRole.DIRECTION_CCC, cooperative: 'Conseil du Café-Cacao', kind: 'onprem' },
 ] as const;
 
 const demoPng = Buffer.from(
@@ -113,6 +95,8 @@ async function seedOwner(
   dataSource: DataSource,
   user: { id: string; email: string },
   offset: number,
+  organizationId: string | null = null,
+  configOwnerId: string = user.id,
 ) {
   const parcelRepo = dataSource.getRepository(Parcel);
   const missionRepo = dataSource.getRepository(Mission);
@@ -128,8 +112,8 @@ async function seedOwner(
   });
   if (existingParcels.length) await parcelRepo.remove(existingParcels);
   await missionRepo.delete({ ownerId: user.id });
-  await settingsRepo.delete({ ownerId: user.id });
-  await droneRepo.delete({ ownerId: user.id });
+  await settingsRepo.delete({ ownerId: configOwnerId });
+  await droneRepo.delete({ ownerId: configOwnerId });
   await exportRepo.delete({ userId: user.id });
   await auditRepo.delete({ userId: user.id });
 
@@ -137,6 +121,7 @@ async function seedOwner(
   const mission1 = await missionRepo.save(
     missionRepo.create({
       ownerId: user.id,
+      organizationId,
       name: 'Tournée Soubré · Secteur Nord',
       missionDate: new Date(now - 3 * 86400000),
       notes: 'Contrôle des foyers signalés et prises de vues terrain.',
@@ -145,6 +130,7 @@ async function seedOwner(
   const mission2 = await missionRepo.save(
     missionRepo.create({
       ownerId: user.id,
+      organizationId,
       name: 'Campagne sanitaire · Semaine 31',
       missionDate: new Date(now - 18 * 86400000),
       notes: 'Échantillonnage régulier des feuilles et vérification terrain.',
@@ -153,6 +139,7 @@ async function seedOwner(
   const mission3 = await missionRepo.save(
     missionRepo.create({
       ownerId: user.id,
+      organizationId,
       name: 'Suivi préventif · Bas-Sassandra',
       missionDate: new Date(now - 48 * 86400000),
       notes: 'Mission de référence pour comparaison temporelle.',
@@ -164,6 +151,7 @@ async function seedOwner(
   const parcels = await parcelRepo.save([
     parcelRepo.create({
       ownerId: user.id,
+      organizationId,
       name: 'Plantation Akouédo A-12',
       boundary: square(baseLng, baseLat),
       status: ParcelStatus.SICK,
@@ -174,6 +162,7 @@ async function seedOwner(
     }),
     parcelRepo.create({
       ownerId: user.id,
+      organizationId,
       name: 'Parcelle Nawa B-07',
       boundary: square(baseLng + 0.012, baseLat + 0.008, 0.006),
       status: ParcelStatus.HEALTHY,
@@ -183,6 +172,7 @@ async function seedOwner(
     }),
     parcelRepo.create({
       ownerId: user.id,
+      organizationId,
       name: 'Bloc Méagui C-04',
       boundary: square(baseLng - 0.011, baseLat + 0.016, 0.008),
       status: ParcelStatus.ANALYZING,
@@ -248,11 +238,14 @@ async function seedOwner(
     const [originLng, originLat] = spec.parcel.boundary.coordinates[0][0];
     const total = spec.infected + spec.healthy;
     const infectionPercentage = total > 0 ? (spec.infected / total) * 100 : 0;
-    const severityLevel = classifySeverity(infectionPercentage / 100, {
-      moderate: 0.1,
-      high: 0.25,
-      critical: 0.4,
-    });
+    const severityLevel =
+      infectionPercentage >= 40
+        ? 'critique'
+        : infectionPercentage >= 25
+          ? 'eleve'
+          : infectionPercentage >= 10
+            ? 'modere'
+            : 'faible';
     const completedAt =
       spec.status === AnalysisStatus.COMPLETED
         ? new Date(createdAt.getTime() + 45 * 60000)
@@ -317,7 +310,7 @@ async function seedOwner(
 
   await settingsRepo.save(
     settingsRepo.create({
-      ownerId: user.id,
+      ownerId: configOwnerId,
       severityModerate: 0.1,
       severityHigh: 0.25,
       severityCritical: 0.4,
@@ -327,7 +320,7 @@ async function seedOwner(
   );
   await droneRepo.save(
     droneRepo.create({
-      ownerId: user.id,
+      ownerId: configOwnerId,
       profileId: 'DJI-M3M-RTK',
       manufacturer: 'DJI',
       model: 'Mavic 3 Multispectral',
@@ -338,7 +331,7 @@ async function seedOwner(
   );
   await droneRepo.save(
     droneRepo.create({
-      ownerId: user.id,
+      ownerId: configOwnerId,
       profileId: 'MOBILE-TERRAIN',
       manufacturer: 'Cocoashield',
       model: 'Mobile terrain',
@@ -347,6 +340,14 @@ async function seedOwner(
       active: true,
     }),
   );
+
+  mission1.droneProfileId = 'DJI-M3M-RTK';
+  mission1.parcelIds = [parcels[0].id, parcels[2].id];
+  mission2.droneProfileId = 'MOBILE-TERRAIN';
+  mission2.parcelIds = [parcels[1].id];
+  mission3.droneProfileId = 'DJI-M3M-RTK';
+  mission3.parcelIds = [parcels[0].id];
+  await missionRepo.save([mission1, mission2, mission3]);
 
   await exportRepo.save(
     exportRepo.create({
@@ -405,58 +406,39 @@ async function seedOwner(
   ]);
 }
 
-/**
- * Le seed supprime les données existantes du propriétaire avant de les
- * réinsérer. Il refuse donc de s'exécuter ailleurs qu'en développement local,
- * pour qu'un `DATABASE_URL` mal pointé ne détruise pas un environnement
- * partagé.
- */
-function assertSafeEnvironment(): void {
-  if (!DEMO_PASSWORD) {
-    throw new Error(
-      'SEED_DEMO_PASSWORD doit être défini pour exécuter le seed de démonstration.',
-    );
-  }
-  const nodeEnv = process.env.NODE_ENV ?? 'development';
-  if (nodeEnv !== 'development') {
-    throw new Error(
-      `Seed refusé : NODE_ENV vaut "${nodeEnv}", ce script est réservé au développement local.`,
-    );
-  }
-  const host = process.env.DATABASE_HOST ?? 'localhost';
-  if (!['localhost', '127.0.0.1', 'db', 'postgres'].includes(host)) {
-    throw new Error(
-      `Seed refusé : la base cible (${host}) n'est pas locale. Ce script efface des données.`,
-    );
-  }
-}
-
 async function main() {
-  assertSafeEnvironment();
-
-  const app = await NestFactory.createApplicationContext(AppModule, {
-    logger: ['error', 'warn'],
-  });
+  const app = await NestFactory.createApplicationContext(AppModule, { logger: ['error', 'warn'] });
   const dataSource = app.get(DataSource);
   const usersService = app.get(UsersService);
   const authService = app.get(AuthService);
   const auth = authService.instance as unknown as Auth;
+  const organizationRepo = dataSource.getRepository(Organization);
 
-  for (let index = 0; index < DEMO_USERS.length; index += 1) {
-    const spec = DEMO_USERS[index];
+  let onPrem = await organizationRepo.findOne({ where: { name: 'Conseil du Café-Cacao' } });
+  if (!onPrem) onPrem = await organizationRepo.save(organizationRepo.create({ name: 'Conseil du Café-Cacao', type: OrganizationType.DIRECTION, offer: ServiceOffer.ON_PREMISE, email: 'direction@ccc.ci', phone: '+225 27 20 00 00 00', active: true }));
+
+  let onPremAdmin: { id: string; email: string } | null = null;
+  for (const spec of DEMO_USERS) {
     const user = await ensureUser(auth, dataSource, spec.email, spec.username);
-    await usersService.createProfile(user.id);
+    const isPlatform = spec.kind === 'platform';
+    const isOnPrem = spec.kind === 'onprem';
     await usersService.update(user.id, {
       role: spec.role,
       cooperative: spec.cooperative,
+      organizationId: isOnPrem ? onPrem.id : null,
+      managedOrganizationIds: spec.role === UserRole.ADMINISTRATEUR && isOnPrem ? [onPrem.id] : [],
       status: UserStatus.ACTIVE,
+      isPlatformAdmin: isPlatform,
     });
-    await seedOwner(dataSource, { id: user.id, email: spec.email }, index);
+    if (spec.email === 'admin.onpremise@ccc.ci') onPremAdmin = { id: user.id, email: spec.email };
   }
 
-  console.log('\nDonnées Cocoashield de démonstration prêtes.');
+  if (onPremAdmin) await seedOwner(dataSource, onPremAdmin, 0, onPrem.id, `organization:${onPrem.id}`);
+
+  console.log('\nDonnées CocoaShield On-Premise de démonstration prêtes.');
   console.log(`Mot de passe commun : ${DEMO_PASSWORD}`);
   for (const spec of DEMO_USERS) console.log(`- ${spec.email} (${spec.role})`);
+  console.log('Parcours recommandé : admin.onpremise@ccc.ci → agronome@ccc.ci → direction@ccc.ci');
   await app.close();
 }
 

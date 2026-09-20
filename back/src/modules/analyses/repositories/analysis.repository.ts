@@ -21,24 +21,15 @@ export class AnalysisRepository {
     });
   }
 
-  /** Recherche incluant les analyses supprimées — réservé à la restauration. */
-  findDeletedById(id: string): Promise<Analysis | null> {
-    return this.repository.findOne({
-      where: { id },
-      relations: { parcel: true },
-      withDeleted: true,
+  findCompletedByParcel(parcelId: string): Promise<Analysis[]> {
+    return this.repository.find({
+      where: { parcelId, status: 'completed' as Analysis['status'] },
+      relations: { images: true, parcel: true, mission: true },
+      order: { completedAt: 'DESC' },
     });
   }
 
   async update(id: string, data: Partial<Analysis>): Promise<void> {
     await this.repository.update(id, data);
-  }
-
-  async softDelete(id: string): Promise<void> {
-    await this.repository.softDelete(id);
-  }
-
-  async restore(id: string): Promise<void> {
-    await this.repository.restore(id);
   }
 }

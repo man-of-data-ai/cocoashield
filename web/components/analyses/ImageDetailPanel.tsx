@@ -40,8 +40,7 @@ export default function ImageDetailPanel({ image }: ImageDetailPanelProps) {
         </div>
 
         <p className="text-xs text-slate-500">
-          Source :{" "}
-          {image.source === "mobile" ? "Application mobile" : "Import web"}
+          Source : {image.source === "mobile" ? "Application mobile" : "Import web"}
         </p>
 
         {image.latitude !== null && image.longitude !== null && (

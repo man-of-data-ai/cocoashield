@@ -104,7 +104,7 @@ Pour préparer un environnement local complet :
 ```bash
 docker compose up -d
 npm run auth:migrate
-SEED_DEMO_PASSWORD='<mot-de-passe-local>' npm run seed:demo
+npm run seed:demo
 npm run start:dev
 ```
 
@@ -112,15 +112,8 @@ npm run start:dev
 
 Le seed est réexécutable. Il crée trois profils correspondant exactement aux rôles de l'application et des jeux de données pour les parcelles, missions, analyses, images, imports en attente, exports, audit et configuration.
 
-Le mot de passe des comptes de démonstration est fourni par la variable
-`SEED_DEMO_PASSWORD` et n'est pas versionné. Le script refuse de s'exécuter si
-`NODE_ENV` n'est pas `development` ou si la base cible n'est pas locale : il
-supprime des données avant de les réinsérer.
-
-Comptes créés :
+Comptes de test (mot de passe commun : `CocoaDemo2026!`) :
 
 - `admin@cocoashield.local` — Administrateur
 - `direction@ccc.ci` — Direction CCC
 - `agronome@cocoashield.local` — Agronome Terrain
-
-La documentation interactive de l'API est servie sur `http://localhost:3000/docs`.

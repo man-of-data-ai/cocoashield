@@ -1,4 +1,5 @@
 import { jsPDF } from "jspdf";
+import { drawCocoaShieldFooter, drawCocoaShieldHeader } from "@/lib/pdf-brand";
 
 export type ComparisonExportParcel = {
   name: string;
@@ -22,6 +23,9 @@ export type ComparisonExportData = {
   leftInfectedImages: number;
   rightInfectedImages: number;
   parcels: ComparisonExportParcel[];
+  parcelName?: string;
+  leftMapImage?: string;
+  rightMapImage?: string;
 };
 
 function timestampForFilename(): string {
@@ -41,15 +45,7 @@ function signed(value: number, suffix: string): string {
   return `${sign}${value.toLocaleString("fr-FR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}${suffix}`;
 }
 
-function drawMetric(
-  doc: jsPDF,
-  x: number,
-  y: number,
-  width: number,
-  label: string,
-  value: string,
-  helper: string,
-) {
+function drawMetric(doc: jsPDF, x: number, y: number, width: number, label: string, value: string, helper: string) {
   doc.setFillColor(248, 250, 246);
   doc.setDrawColor(224, 231, 220);
   doc.roundedRect(x, y, width, 24, 3, 3, "FD");
@@ -66,15 +62,7 @@ function drawMetric(
   doc.text(helper, x + 4, y + 20);
 }
 
-function drawRateBar(
-  doc: jsPDF,
-  x: number,
-  y: number,
-  width: number,
-  label: string,
-  rate: number,
-  fill: [number, number, number],
-) {
+function drawRateBar(doc: jsPDF, x: number, y: number, width: number, label: string, rate: number, fill: [number, number, number]) {
   doc.setFontSize(8.5);
   doc.setTextColor(71, 85, 105);
   doc.text(label, x, y);
@@ -82,15 +70,46 @@ function drawRateBar(
   doc.setFillColor(235, 239, 232);
   doc.roundedRect(x, y + 3, width, 5, 2.5, 2.5, "F");
   doc.setFillColor(...fill);
-  doc.roundedRect(
-    x,
-    y + 3,
-    Math.max(0.5, width * Math.min(1, Math.max(0, rate))),
-    5,
-    2.5,
-    2.5,
-    "F",
-  );
+  doc.roundedRect(x, y + 3, Math.max(0.5, width * Math.min(1, Math.max(0, rate))), 5, 2.5, 2.5, "F");
+}
+
+
+function addMapComparisonPage(doc: jsPDF, data: ComparisonExportData) {
+  if (!data.leftMapImage || !data.rightMapImage) return;
+  doc.addPage();
+  const width = doc.internal.pageSize.getWidth();
+  const height = doc.internal.pageSize.getHeight();
+  const margin = 12;
+  drawCocoaShieldHeader(doc, { title: "Comparaison cartographique détaillée", subtitle: data.parcelName ? `Parcelle : ${data.parcelName}` : "Parcelle sélectionnée", height: 28, margin });
+
+  const gap = 6;
+  const cardWidth = (width - margin * 2 - gap) / 2;
+  const titleY = 38;
+  const imageY = 45;
+  const imageHeight = height - imageY - 20;
+  const drawCard = (x: number, title: string, date: string, image: string) => {
+    doc.setDrawColor(224, 231, 220);
+    doc.setFillColor(250, 252, 248);
+    doc.roundedRect(x, 32, cardWidth, height - 47, 3, 3, "FD");
+    doc.setTextColor(32, 59, 42);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.text(title, x + 4, titleY);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(100, 116, 139);
+    doc.text(date, x + cardWidth - 4, titleY, { align: "right" });
+    const properties = doc.getImageProperties(image);
+    const maxWidth = cardWidth - 8;
+    const maxHeight = imageHeight;
+    const ratio = properties.width / properties.height;
+    let drawWidth = maxWidth;
+    let drawHeight = drawWidth / ratio;
+    if (drawHeight > maxHeight) { drawHeight = maxHeight; drawWidth = drawHeight * ratio; }
+    doc.addImage(image, "PNG", x + 4 + (maxWidth - drawWidth) / 2, imageY + (maxHeight - drawHeight) / 2, drawWidth, drawHeight, undefined, "FAST");
+  };
+  drawCard(margin, data.leftName, data.leftDate, data.leftMapImage);
+  drawCard(margin + cardWidth + gap, data.rightName, data.rightDate, data.rightMapImage);
 }
 
 export function exportComparisonPdf(data: ComparisonExportData): void {
@@ -99,66 +118,23 @@ export function exportComparisonPdf(data: ComparisonExportData): void {
   const height = doc.internal.pageSize.getHeight();
   const margin = 12;
 
-  doc.setFillColor(32, 59, 42);
-  doc.rect(0, 0, width, 36, "F");
-  doc.setTextColor(255, 255, 255);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(18);
-  doc.text("Cocoashield", margin, 14);
-  doc.setFontSize(12);
-  doc.text("Comparatif de campagnes phytosanitaires", margin, 23);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8.5);
-  doc.setTextColor(219, 233, 214);
-  doc.text(
-    `${data.leftName} (${data.leftDate})  →  ${data.rightName} (${data.rightDate})`,
+  drawCocoaShieldHeader(doc, {
+    title: "Comparatif d’analyses phytosanitaires",
+    subtitle: data.parcelName ? `Parcelle : ${data.parcelName}` : undefined,
+    context: `${data.leftDate} → ${data.rightDate}`,
+    height: 36,
     margin,
-    30,
-  );
+  });
 
   const rateDelta = (data.rightInfectionRate - data.leftInfectionRate) * 100;
-  const areaDelta =
-    (data.rightInfectedAreaSquareMeters - data.leftInfectedAreaSquareMeters) /
-    10_000;
+  const areaDelta = (data.rightInfectedAreaSquareMeters - data.leftInfectedAreaSquareMeters) / 10_000;
   const metricGap = 4;
   const metricWidth = (width - margin * 2 - metricGap * 3) / 4;
   let y = 44;
-  drawMetric(
-    doc,
-    margin,
-    y,
-    metricWidth,
-    "Infection référence",
-    formatPercent(data.leftInfectionRate),
-    data.leftName,
-  );
-  drawMetric(
-    doc,
-    margin + (metricWidth + metricGap),
-    y,
-    metricWidth,
-    "Infection comparée",
-    formatPercent(data.rightInfectionRate),
-    data.rightName,
-  );
-  drawMetric(
-    doc,
-    margin + (metricWidth + metricGap) * 2,
-    y,
-    metricWidth,
-    "Variation",
-    signed(rateDelta, " pts"),
-    "Évolution du taux",
-  );
-  drawMetric(
-    doc,
-    margin + (metricWidth + metricGap) * 3,
-    y,
-    metricWidth,
-    "Évolution surface",
-    signed(areaDelta, " ha"),
-    "Zones affectées estimées",
-  );
+  drawMetric(doc, margin, y, metricWidth, "Infection référence", formatPercent(data.leftInfectionRate), data.leftName);
+  drawMetric(doc, margin + (metricWidth + metricGap), y, metricWidth, "Infection comparée", formatPercent(data.rightInfectionRate), data.rightName);
+  drawMetric(doc, margin + (metricWidth + metricGap) * 2, y, metricWidth, "Variation", signed(rateDelta, " pts"), "Évolution du taux");
+  drawMetric(doc, margin + (metricWidth + metricGap) * 3, y, metricWidth, "Évolution surface", signed(areaDelta, " ha"), "Zones affectées estimées");
 
   y += 34;
   doc.setFontSize(11);
@@ -168,24 +144,8 @@ export function exportComparisonPdf(data: ComparisonExportData): void {
   doc.setFont("helvetica", "normal");
   y += 7;
   const chartWidth = 118;
-  drawRateBar(
-    doc,
-    margin,
-    y,
-    chartWidth,
-    data.leftName,
-    data.leftInfectionRate,
-    [93, 130, 63],
-  );
-  drawRateBar(
-    doc,
-    margin,
-    y + 15,
-    chartWidth,
-    data.rightName,
-    data.rightInfectionRate,
-    [184, 69, 51],
-  );
+  drawRateBar(doc, margin, y, chartWidth, data.leftName, data.leftInfectionRate, [93, 130, 63]);
+  drawRateBar(doc, margin, y + 15, chartWidth, data.rightName, data.rightInfectionRate, [184, 69, 51]);
 
   const summaryX = margin + 136;
   doc.setFillColor(248, 250, 246);
@@ -193,33 +153,12 @@ export function exportComparisonPdf(data: ComparisonExportData): void {
   doc.roundedRect(summaryX, y - 4, width - margin - summaryX, 34, 3, 3, "FD");
   doc.setFontSize(9);
   doc.setTextColor(71, 85, 105);
-  doc.text(
-    `Images traitées : ${data.leftProcessedImages} → ${data.rightProcessedImages}`,
-    summaryX + 5,
-    y + 4,
-  );
-  doc.text(
-    `Images infectées : ${data.leftInfectedImages} → ${data.rightInfectedImages}`,
-    summaryX + 5,
-    y + 11,
-  );
-  doc.text(
-    `Surface infectée : ${formatArea(data.leftInfectedAreaSquareMeters)} → ${formatArea(data.rightInfectedAreaSquareMeters)}`,
-    summaryX + 5,
-    y + 18,
-  );
-  const evolution =
-    rateDelta > 0.05
-      ? "aggravation"
-      : rateDelta < -0.05
-        ? "amélioration"
-        : "stabilité";
+  doc.text(`Images traitées : ${data.leftProcessedImages} → ${data.rightProcessedImages}`, summaryX + 5, y + 4);
+  doc.text(`Images infectées : ${data.leftInfectedImages} → ${data.rightInfectedImages}`, summaryX + 5, y + 11);
+  doc.text(`Surface infectée : ${formatArea(data.leftInfectedAreaSquareMeters)} → ${formatArea(data.rightInfectedAreaSquareMeters)}`, summaryX + 5, y + 18);
+  const evolution = rateDelta > 0.05 ? "aggravation" : rateDelta < -0.05 ? "amélioration" : "stabilité";
   doc.setFont("helvetica", "bold");
-  doc.setTextColor(
-    rateDelta > 0.05 ? 180 : rateDelta < -0.05 ? 45 : 71,
-    rateDelta > 0.05 ? 69 : rateDelta < -0.05 ? 120 : 85,
-    rateDelta > 0.05 ? 51 : rateDelta < -0.05 ? 74 : 105,
-  );
+  doc.setTextColor(rateDelta > 0.05 ? 180 : rateDelta < -0.05 ? 45 : 71, rateDelta > 0.05 ? 69 : rateDelta < -0.05 ? 120 : 85, rateDelta > 0.05 ? 51 : rateDelta < -0.05 ? 74 : 105);
   doc.text(`Tendance globale : ${evolution}`, summaryX + 5, y + 26);
   doc.setFont("helvetica", "normal");
 
@@ -231,13 +170,7 @@ export function exportComparisonPdf(data: ComparisonExportData): void {
   doc.setFont("helvetica", "normal");
   y += 6;
 
-  const columns = [
-    margin,
-    margin + 74,
-    margin + 113,
-    margin + 151,
-    margin + 190,
-  ];
+  const columns = [margin, margin + 74, margin + 113, margin + 151, margin + 190];
   doc.setFillColor(244, 247, 242);
   doc.roundedRect(margin, y, width - margin * 2, 8, 2, 2, "F");
   doc.setFontSize(7.5);
@@ -266,16 +199,8 @@ export function exportComparisonPdf(data: ComparisonExportData): void {
     doc.setTextColor(51, 65, 85);
     const parcelName = doc.splitTextToSize(parcel.name, 65) as string[];
     doc.text(parcelName.slice(0, 1), columns[0] + 3, y);
-    doc.text(
-      parcel.leftRate === null ? "—" : formatPercent(parcel.leftRate),
-      columns[1],
-      y,
-    );
-    doc.text(
-      parcel.rightRate === null ? "—" : formatPercent(parcel.rightRate),
-      columns[2],
-      y,
-    );
+    doc.text(parcel.leftRate === null ? "—" : formatPercent(parcel.leftRate), columns[1], y);
+    doc.text(parcel.rightRate === null ? "—" : formatPercent(parcel.rightRate), columns[2], y);
     doc.text(parcel.leftLevel ?? "—", columns[3], y);
     doc.text(parcel.rightLevel ?? "—", columns[4], y);
     doc.setDrawColor(235, 239, 232);
@@ -284,17 +209,12 @@ export function exportComparisonPdf(data: ComparisonExportData): void {
     rowsOnPage += 1;
   }
 
+  addMapComparisonPage(doc, data);
+
   const pages = doc.getNumberOfPages();
   for (let page = 1; page <= pages; page += 1) {
     doc.setPage(page);
-    doc.setDrawColor(224, 231, 220);
-    doc.line(margin, height - 12, width - margin, height - 12);
-    doc.setFontSize(7.5);
-    doc.setTextColor(100, 116, 139);
-    doc.text("Cocoashield — Comparatif de campagnes", margin, height - 7);
-    doc.text(`Page ${page}/${pages}`, width - margin, height - 7, {
-      align: "right",
-    });
+    drawCocoaShieldFooter(doc, "Comparatif d’analyses phytosanitaires", page, pages, margin);
   }
 
   doc.save(`comparaison-cocoashield-${timestampForFilename()}.pdf`);

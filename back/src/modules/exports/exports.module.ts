@@ -1,17 +1,28 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { ConfigModule } from '../../core/config/config.module';
-import { AuditModule } from '../audit/audit.module';
+import { ConfigModule } from '../../libs/infrastructure/config/config.module';
+import { Analysis } from '../analyses/entities/analysis.entity';
+import { AnalysisImage } from '../analyses/entities/analysis-image.entity';
+import { Mission } from '../missions/entities/mission.entity';
 import { Parcel } from '../parcels/entities/parcel.entity';
-import { ExportRecord } from './entities/export-record.entity';
 import { ExportsController } from './exports.controller';
 import { ExportsService } from './exports.service';
+import { AuditModule } from '../audit/audit.module';
+import { ExportRecord } from './entities/export-record.entity';
+import { UsersModule } from '../users/users.module';
 
 @Module({
   imports: [
     ConfigModule,
     AuditModule,
-    TypeOrmModule.forFeature([ExportRecord, Parcel]),
+    UsersModule,
+    TypeOrmModule.forFeature([
+      ExportRecord,
+      Parcel,
+      Analysis,
+      AnalysisImage,
+      Mission,
+    ]),
   ],
   controllers: [ExportsController],
   providers: [ExportsService],

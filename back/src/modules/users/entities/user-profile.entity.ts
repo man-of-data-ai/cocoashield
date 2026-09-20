@@ -5,6 +5,7 @@ export enum UserRole {
   ADMINISTRATEUR = 'administrateur',
   DIRECTION_CCC = 'direction_ccc',
   AGRONOME_TERRAIN = 'agronome_terrain',
+  OPERATEUR_TERRAIN = 'operateur_terrain',
 }
 
 export enum UserStatus {
@@ -14,7 +15,7 @@ export enum UserStatus {
 
 @Entity('app_user_profile')
 export class UserProfile extends RestEntity {
-  @Index({ unique: true, where: 'deleted_at IS NULL' })
+  @Index({ unique: true })
   @Column({ name: 'user_id' })
   userId: string;
 
@@ -24,6 +25,16 @@ export class UserProfile extends RestEntity {
   @Column({ type: 'varchar', nullable: true })
   cooperative: string | null;
 
+  @Index()
+  @Column({ name: 'organization_id', type: 'varchar', nullable: true })
+  organizationId: string | null;
+
+  @Column({ name: 'default_parcel_id', type: 'uuid', nullable: true })
+  defaultParcelId: string | null;
+
   @Column({ type: 'enum', enum: UserStatus, default: UserStatus.ACTIVE })
   status: UserStatus;
+
+  @Column({ name: 'is_platform_admin', default: false })
+  isPlatformAdmin: boolean;
 }
