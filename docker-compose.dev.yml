@@ -24,11 +24,14 @@ services:
       target: development
     environment:
       NODE_ENV: development
+      MODEL_PATH: /models/cocoashield_v3.onnx
+      MODEL_VERSION: v3
     ports:
       - "3000:3000"
     volumes:
       # Le code du dépôt écrase l'image…
       - ./back:/app
+      - ./model/v3:/models:ro
       # …sauf node_modules, qui reste celui de l'image : les binaires natifs
       # compilés dans l'image ne sont pas ceux de la machine hôte.
       - back_node_modules:/app/node_modules

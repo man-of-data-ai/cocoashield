@@ -76,6 +76,10 @@ export class ConfigService {
     return this.envConfig.WEB_URL;
   }
 
+  get mobileAppScheme(): string {
+    return this.envConfig.MOBILE_APP_SCHEME;
+  }
+
   get redisConnection(): { host: string; port: number } {
     return {
       host: this.envConfig.REDIS_HOST,
@@ -91,7 +95,11 @@ export class ConfigService {
     return this.nodeEnv === Environment.PRODUCTION;
   }
 
-  get demoInferenceMode(): boolean {
-    return this.envConfig.DEMO_INFERENCE_MODE === 'true';
+  get modelPath(): string {
+    return this.envConfig.MODEL_PATH;
+  }
+
+  get modelVersion(): string {
+    return this.envConfig.MODEL_VERSION;
   }
 }

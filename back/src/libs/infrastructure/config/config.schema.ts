@@ -46,6 +46,9 @@ export class ConfigSchema {
   @IsUrl({ require_tld: false })
   WEB_URL: string = 'http://localhost:3002';
 
+  @IsString()
+  MOBILE_APP_SCHEME: string = 'cocoashield';
+
   // Redis / BullMQ
   @IsString()
   REDIS_HOST: string;
@@ -57,15 +60,9 @@ export class ConfigSchema {
   @IsString()
   UPLOADS_DIR: string = './uploads';
 
-  /**
-   * Classification de démonstration : un résultat déterministe dérivé du
-   * fichier, pour parcourir Upload -> Redis -> Analyse -> Carte sans modèle.
-   * Refusé en production (voir ImageInferenceService) : un diagnostic
-   * phytosanitaire fabriqué est plus nuisible qu'une fonctionnalité absente.
-   */
-  // Déclaré en chaîne et non en booléen : `enableImplicitConversion` transforme
-  // toute chaîne non vide en `true`, donc une faute de frappe activerait le
-  // faux classifieur sans rien signaler. `IsIn` la refuse au démarrage.
-  @IsIn(['true', 'false'])
-  DEMO_INFERENCE_MODE: string = 'false';
+  @IsString()
+  MODEL_PATH: string = '../model/v3/cocoashield_v3.onnx';
+
+  @IsString()
+  MODEL_VERSION: string = 'v3';
 }
