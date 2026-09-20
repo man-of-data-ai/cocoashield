@@ -24,11 +24,18 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm npm ci --omit=dev --no-audit --no-fund
 
-# Runtime — node:22-slim (glibc) : requis par sharp/onnxruntime-node dès que
-# l'inférence ONNX est rétablie sur cette branche.
+# Runtime — node:22-slim (glibc) : requis par sharp/onnxruntime-node.
 FROM node:22-slim
 WORKDIR /app
 ENV NODE_ENV=production
+
+ARG MODEL_VERSION=v3
+ARG MODEL_SHA256=f0e1533fac81ef762dbfc981d5a7bb26b6584a68e00e40570e104f169e860496
+ADD https://github.com/man-of-data-ai/cocoashield/releases/download/model-${MODEL_VERSION}/cocoashield_${MODEL_VERSION}.onnx /app/models/
+RUN echo "${MODEL_SHA256}  /app/models/cocoashield_${MODEL_VERSION}.onnx" | sha256sum -c - \
+  && chmod 644 /app/models/cocoashield_${MODEL_VERSION}.onnx
+ENV MODEL_PATH=/app/models/cocoashield_${MODEL_VERSION}.onnx \
+    MODEL_VERSION=${MODEL_VERSION}
 
 COPY --link --from=deps-prod /app/node_modules ./node_modules
 COPY --link --from=build /app/dist ./dist

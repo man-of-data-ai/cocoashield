@@ -91,7 +91,11 @@ export class ConfigService {
     return this.nodeEnv === Environment.PRODUCTION;
   }
 
-  get demoInferenceMode(): boolean {
-    return this.envConfig.DEMO_INFERENCE_MODE === 'true';
+  get modelPath(): string {
+    return this.envConfig.MODEL_PATH;
+  }
+
+  get modelVersion(): string {
+    return this.envConfig.MODEL_VERSION;
   }
 }
