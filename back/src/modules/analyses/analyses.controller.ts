@@ -19,6 +19,21 @@ import { AnalysesService } from './analyses.service';
 import { AnalysisImageMeta } from './dtos/create-analysis.dto';
 import { UpdateAnalysisNotesDto } from './dtos/update-analysis-notes.dto';
 
+function parseImageMetas(resultsJson?: string): AnalysisImageMeta[] {
+  if (!resultsJson) {
+    return [];
+  }
+  try {
+    const parsed: unknown = JSON.parse(resultsJson);
+    if (!Array.isArray(parsed)) {
+      throw new Error('results must be a JSON array');
+    }
+    return parsed as AnalysisImageMeta[];
+  } catch {
+    throw new BadRequestException('results must be a valid JSON array');
+  }
+}
+
 @Controller(`${routes.version}${routes.parcels.root}`)
 export class ParcelAnalysesController {
   constructor(private readonly analysesService: AnalysesService) {}
@@ -34,7 +49,7 @@ export class ParcelAnalysesController {
     @Body('missionName') missionName?: string,
     @Body('profileId') profileId?: string,
   ) {
-    const results = this.parseResults(resultsJson);
+    const results = parseImageMetas(resultsJson);
     return this.analysesService.create(
       parcelId,
       session.user.id,
@@ -46,25 +61,31 @@ export class ParcelAnalysesController {
     );
   }
 
-  private parseResults(resultsJson?: string): AnalysisImageMeta[] {
-    if (!resultsJson) {
-      return [];
-    }
-    try {
-      const parsed: unknown = JSON.parse(resultsJson);
-      if (!Array.isArray(parsed)) {
-        throw new Error('results must be a JSON array');
-      }
-      return parsed as AnalysisImageMeta[];
-    } catch {
-      throw new BadRequestException('results must be a valid JSON array');
-    }
-  }
 }
 
 @Controller(`${routes.version}${routes.analyses.root}`)
 export class AnalysesController {
   constructor(private readonly analysesService: AnalysesService) {}
+
+  @Post()
+  @UseInterceptors(FilesInterceptor('images'))
+  createFromCapture(
+    @Session() session: UserSession,
+    @UploadedFiles() images: Express.Multer.File[],
+    @Body('results') resultsJson?: string,
+    @Body('missionId') missionId?: string,
+    @Body('missionName') missionName?: string,
+    @Body('profileId') profileId?: string,
+  ) {
+    return this.analysesService.createFromCapture(
+      session.user.id,
+      images,
+      parseImageMetas(resultsJson),
+      missionId,
+      missionName,
+      profileId,
+    );
+  }
 
   @Get(routes.analyses.byId)
   findOne(@Session() session: UserSession, @Param('id') id: string) {

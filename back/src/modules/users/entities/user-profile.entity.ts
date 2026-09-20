@@ -29,6 +29,9 @@ export class UserProfile extends RestEntity {
   @Column({ name: 'organization_id', type: 'varchar', nullable: true })
   organizationId: string | null;
 
+  @Column({ name: 'default_parcel_id', type: 'uuid', nullable: true })
+  defaultParcelId: string | null;
+
   @Column({ type: 'enum', enum: UserStatus, default: UserStatus.ACTIVE })
   status: UserStatus;
 

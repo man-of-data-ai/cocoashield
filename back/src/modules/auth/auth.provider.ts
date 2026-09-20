@@ -15,6 +15,18 @@ export function createAuth(config: ConfigService) {
       enabled: true,
     },
     plugins: [username()],
+
+    advanced: {
+      database: {
+        // Identifiants UUID pour les tables gérées par better-auth
+        // (`user`, `session`, `account`, `verification`), comme pour les
+        // entités applicatives : un identifiant énumérable facilite le
+        // balayage horizontal des ressources d'autrui. La génération est
+        // déléguée à PostgreSQL, qui fournit le DEFAULT posé par la migration
+        // 20260827_better_auth_id_defaults.sql.
+        generateId: 'uuid',
+      },
+    },
   });
 }
 

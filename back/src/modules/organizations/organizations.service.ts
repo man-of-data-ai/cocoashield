@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { AdminOrganization } from '../users/entities/admin-organization.entity';
 import { UserProfile, UserRole, UserStatus } from '../users/entities/user-profile.entity';
+import { ConfigService } from '../../libs/infrastructure/config/config.service';
 import { CreateOrganizationDto, UpdateOrganizationDto } from './dtos';
 import { Organization } from './entities/organization.entity';
 
@@ -12,6 +13,7 @@ export class OrganizationsService {
     @InjectRepository(Organization) private readonly repo: Repository<Organization>,
     @InjectRepository(UserProfile) private readonly profiles: Repository<UserProfile>,
     @InjectRepository(AdminOrganization) private readonly assignments: Repository<AdminOrganization>,
+    private readonly config: ConfigService,
   ) {}
 
   private async actor(userId: string) {
@@ -48,7 +50,15 @@ export class OrganizationsService {
     return this.repo.save(org);
   }
 
+  /**
+   * Jeu d'organisations de démonstration, pour que les écrans ne soient pas
+   * vides pendant une présentation. Jamais en production : ces quatre entités
+   * sont fictives, et une fois écrites elles sont indiscernables de vraies
+   * organisations clientes. Un administrateur plateforme crée les siennes via
+   * POST /v1/organizations.
+   */
   private async ensureDemo() {
+    if (this.config.isProduction) return;
     if (await this.repo.count()) return;
     await this.repo.save(this.repo.create([
       {name:'COOP-CA Soubré',type:'cooperative',offer:'saas_byod',email:'contact@coop-soubre.ci',phone:'+225 07 00 00 00 01'},

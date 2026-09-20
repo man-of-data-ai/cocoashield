@@ -47,11 +47,11 @@ export class ConfigService {
   get typeOrmConfig(): TypeOrmModuleOptions {
     return {
       type: 'postgres',
-      host: this.envConfig.DB_HOST,
-      port: +this.envConfig.DB_PORT,
-      username: this.envConfig.DB_USERNAME,
-      password: this.envConfig.DB_PASSWORD,
-      database: this.envConfig.DB_NAME,
+      host: this.envConfig.DATABASE_HOST,
+      port: +this.envConfig.DATABASE_PORT,
+      username: this.envConfig.DATABASE_USERNAME,
+      password: this.envConfig.DATABASE_PASSWORD,
+      database: this.envConfig.DATABASE_NAME,
       autoLoadEntities: true,
       synchronize: this.nodeEnv !== Environment.PRODUCTION,
       logging: this.nodeEnv === Environment.DEVELOPMENT,
@@ -59,9 +59,9 @@ export class ConfigService {
   }
 
   get databaseUrl(): string {
-    const { DB_USERNAME, DB_PASSWORD, DB_HOST, DB_PORT, DB_NAME } =
+    const { DATABASE_USERNAME, DATABASE_PASSWORD, DATABASE_HOST, DATABASE_PORT, DATABASE_NAME } =
       this.envConfig;
-    return `postgresql://${DB_USERNAME}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}`;
+    return `postgresql://${DATABASE_USERNAME}:${DATABASE_PASSWORD}@${DATABASE_HOST}:${DATABASE_PORT}/${DATABASE_NAME}`;
   }
 
   get betterAuthSecret(): string {
@@ -85,5 +85,13 @@ export class ConfigService {
 
   get uploadsDir(): string {
     return this.envConfig.UPLOADS_DIR;
+  }
+
+  get isProduction(): boolean {
+    return this.nodeEnv === Environment.PRODUCTION;
+  }
+
+  get demoInferenceMode(): boolean {
+    return this.envConfig.DEMO_INFERENCE_MODE === 'true';
   }
 }
