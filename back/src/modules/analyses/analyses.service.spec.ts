@@ -62,3 +62,37 @@ describe('AnalysesService.createFromCapture', () => {
     expect(parcelsService.resolveForCapture).toHaveBeenCalledWith('u1', null);
   });
 });
+
+describe('AnalysesService.create', () => {
+  it('keeps the on-device verdict apart and still queues the server analysis', async () => {
+    const images: Array<Record<string, unknown>> = [];
+    const imageRepo = {
+      create: jest.fn(async (data: Record<string, unknown>) => {
+        images.push(data);
+        return { id: `img${images.length}`, ...data };
+      }),
+    };
+    const queue = { add: jest.fn() };
+    const service = new AnalysesService(
+      { create: jest.fn().mockResolvedValue({ id: 'a1' }) } as never,
+      imageRepo as never,
+      { findOneForOwner: jest.fn().mockResolvedValue({ organizationId: null }), updateStatus: jest.fn() } as never,
+      { extractGps: jest.fn().mockResolvedValue(null) } as never,
+      null as never,
+      { resolve: jest.fn().mockResolvedValue(null) } as never,
+      null as never,
+      queue as never,
+    );
+    jest.spyOn(service, 'findOne').mockResolvedValue({ id: 'a1' } as never);
+
+    await service.create('p1', 'u1', [{ path: '/tmp/a.jpg' }, { path: '/tmp/b.jpg' }] as never, [
+      { source: AnalysisImageSource.MOBILE, result: AnalysisResult.INFECTED, confidence: 0.91 },
+      { source: AnalysisImageSource.UPLOAD },
+    ]);
+
+    expect(images[0]).toMatchObject({ status: 'pending', mobileResult: 'infected', mobileConfidence: 0.91 });
+    expect(images[0]).not.toHaveProperty('result');
+    expect(images[1]).toMatchObject({ mobileResult: null, mobileConfidence: null });
+    expect(queue.add.mock.calls.map(([, job]) => job)).toEqual([{ analysisImageId: 'img1' }, { analysisImageId: 'img2' }]);
+  });
+});
