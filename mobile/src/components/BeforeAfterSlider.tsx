@@ -6,14 +6,16 @@ import { buildHeatmapImage } from '../utils/heatmapImage';
 export function BeforeAfterSlider({
   imageUri,
   grid,
-  size,
+  width,
+  height,
 }: {
   imageUri: string;
   grid: number[][];
-  size: number;
+  width: number;
+  height: number;
 }) {
   const photo = useImage(imageUri);
-  const heatmapRes = Math.min(160, Math.round(size));
+  const heatmapRes = Math.min(160, Math.round(width));
   const heatmap = useMemo(
     () => buildHeatmapImage(grid, heatmapRes),
     [grid, heatmapRes]
@@ -21,8 +23,8 @@ export function BeforeAfterSlider({
 
   // sliderX = position du curseur, en pixels depuis la gauche. A droite du curseur : image
   // originale seule. A gauche : image + heatmap.
-  const [sliderX, setSliderX] = useState(size / 2);
-  const dragStart = useRef(size / 2);
+  const [sliderX, setSliderX] = useState(width / 2);
+  const dragStart = useRef(width / 2);
 
   const panResponder = useRef(
     PanResponder.create({
@@ -34,7 +36,7 @@ export function BeforeAfterSlider({
       onPanResponderMove: (_evt, gestureState) => {
         const next = Math.max(
           0,
-          Math.min(size, dragStart.current + gestureState.dx)
+          Math.min(width, dragStart.current + gestureState.dx)
         );
         setSliderX(next);
       },
@@ -44,16 +46,16 @@ export function BeforeAfterSlider({
   if (!photo) return null;
 
   return (
-    <View style={{ width: size, height: size }} {...panResponder.panHandlers}>
-      <Canvas style={{ width: size, height: size }}>
+    <View style={{ width, height }} {...panResponder.panHandlers}>
+      <Canvas style={{ width, height }}>
         {/* Image originale, toujours visible en dessous (partie droite du curseur). */}
-        <Image image={photo} x={0} y={0} width={size} height={size} fit="cover" />
+        <Image image={photo} x={0} y={0} width={width} height={height} fit="fill" />
 
         {/* Image + heatmap, revelee uniquement a gauche du curseur. */}
-        <Group clip={{ x: 0, y: 0, width: sliderX, height: size }}>
-          <Image image={photo} x={0} y={0} width={size} height={size} fit="cover" />
+        <Group clip={{ x: 0, y: 0, width: sliderX, height }}>
+          <Image image={photo} x={0} y={0} width={width} height={height} fit="fill" />
           {heatmap && (
-            <Image image={heatmap} x={0} y={0} width={size} height={size} fit="fill" />
+            <Image image={heatmap} x={0} y={0} width={width} height={height} fit="fill" />
           )}
         </Group>
       </Canvas>
@@ -62,7 +64,7 @@ export function BeforeAfterSlider({
       <View pointerEvents="none" style={[styles.handleLine, { left: sliderX - 1 }]} />
       <View
         pointerEvents="none"
-        style={[styles.handle, { left: sliderX - 16, top: size / 2 - 16 }]}
+        style={[styles.handle, { left: sliderX - 16, top: height / 2 - 16 }]}
       >
         <View style={styles.handleDotLeft} />
         <View style={styles.handleDotRight} />
