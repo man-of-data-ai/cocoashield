@@ -89,7 +89,7 @@ export class ParcelsService {
   async resolveForCapture(
     userId: string,
     position: { latitude: number; longitude: number } | null,
-  ): Promise<string> {
+  ): Promise<string | null> {
     const scope = await this.usersService.getAccessScope(userId);
 
     if (position) {
@@ -103,12 +103,10 @@ export class ParcelsService {
       if (containing) return containing.id;
     }
 
+    // Ni parcelle à cette position ni parcelle par défaut : la capture est
+    // enregistrée hors parcelle plutôt que perdue.
     const { defaultParcelId } = await this.usersService.ensureProfile(userId);
-    if (!defaultParcelId) {
-      throw new BadRequestException(
-        "Aucune parcelle ne contient cette position et aucune parcelle par défaut n'est rattachée à ce compte.",
-      );
-    }
+    if (!defaultParcelId) return null;
 
     const fallback = await this.parcelRepository.findByIdAccessible(
       defaultParcelId,

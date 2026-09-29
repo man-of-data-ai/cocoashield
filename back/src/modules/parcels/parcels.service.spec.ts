@@ -56,10 +56,10 @@ describe('ParcelsService.resolveForCapture', () => {
     expect(parcelRepository.findContaining).not.toHaveBeenCalled();
   });
 
-  it('refuses when there is no position match and no default', async () => {
+  it('resolves to no parcel when there is no position match and no default', async () => {
     const { service } = build({ containing: null, defaultParcelId: null });
 
-    await expect(service.resolveForCapture('u1', AT_PARCEL)).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.resolveForCapture('u1', AT_PARCEL)).resolves.toBeNull();
   });
 
   it('refuses a default parcel that is outside the account scope', async () => {
