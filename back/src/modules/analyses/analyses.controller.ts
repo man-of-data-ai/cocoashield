@@ -87,6 +87,12 @@ export class AnalysesController {
     );
   }
 
+  // Déclarée avant `:id`, sinon « mobile » serait lu comme un identifiant.
+  @Get(routes.analyses.mobile)
+  listMobile(@Session() session: UserSession) {
+    return this.analysesService.listMobileCaptures(session.user.id);
+  }
+
   @Get(routes.analyses.byId)
   findOne(@Session() session: UserSession, @Param('id') id: string) {
     return this.analysesService.findOneForOwner(id, session.user.id);

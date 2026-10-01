@@ -26,6 +26,7 @@ const parcels = {
 
 const analyses = {
   root: '/analyses',
+  mobile: '/mobile',
   byId: '/:id',
 };
 
