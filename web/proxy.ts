@@ -17,16 +17,17 @@ function area(pathname: string): string | null {
   if (pathname.startsWith("/utilisateurs")) return "users";
   if (pathname.startsWith("/organisations")) return "organizations";
   if (pathname.startsWith("/audit")) return "audit";
+  if (pathname.startsWith("/analyses-mobile")) return "mobileAnalyses";
   return null;
 }
 
 const rolePermissions: Record<Role, string[]> = {
-  administrateur: ["dashboard","parcels","map","comparison","missions","exports","reports","users","audit","analysis"],
+  administrateur: ["dashboard","parcels","map","comparison","missions","mobileAnalyses","exports","reports","users","audit","analysis"],
   direction_ccc: ["dashboard"],
-  agronome_terrain: ["parcels","map","comparison","missions","analysis"],
-  operateur_terrain: ["parcels","map","missions","analysis"],
+  agronome_terrain: ["parcels","map","comparison","missions","mobileAnalyses","analysis"],
+  operateur_terrain: ["parcels","map","missions","mobileAnalyses","analysis"],
 };
-const platformPermissions = ["dashboard","organizations","users","configuration","audit"];
+const platformPermissions = ["dashboard","organizations","mobileAnalyses","users","configuration","audit"];
 
 function home(profile: { role: Role; isPlatformAdmin?: boolean }) {
   return profile.isPlatformAdmin || profile.role === "administrateur" || profile.role === "direction_ccc" ? "/dashboard" : "/parcels";
@@ -56,5 +57,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/parcels/:path*", "/map/:path*", "/comparaison/:path*", "/missions/:path*", "/exports/:path*", "/rapports/:path*", "/configuration/:path*", "/utilisateurs/:path*", "/organisations/:path*", "/audit/:path*"],
+  matcher: ["/dashboard/:path*", "/parcels/:path*", "/map/:path*", "/comparaison/:path*", "/missions/:path*", "/exports/:path*", "/rapports/:path*", "/configuration/:path*", "/utilisateurs/:path*", "/organisations/:path*", "/audit/:path*", "/analyses-mobile/:path*"],
 };

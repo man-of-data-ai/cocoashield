@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
-import { BarChart3, Database, Download, LogOut, Map, Layers, Send, Settings, Shield, Users, Menu, X, Clock3, ChevronDown, Building2, Pencil, Eye, EyeOff, LayoutDashboard } from "lucide-react";
+import { BarChart3, Database, Download, LogOut, Map, Layers, Send, Settings, Shield, Users, Menu, X, Clock3, ChevronDown, Building2, Pencil, Eye, EyeOff, LayoutDashboard, Smartphone } from "lucide-react";
 
 import { useAuth } from "@/context/AuthContext";
 import { areaForPath, canAccessProfile, defaultPathForProfile } from "@/lib/access-control";
@@ -28,6 +28,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/configuration", label: "Configuration", icon: Settings, area: "configuration" },
   { href: "/utilisateurs", label: "Utilisateurs", icon: Users, area: "users" },
   { href: "/organisations", label: "Organisations", icon: Building2, area: "organizations" },
+  { href: "/analyses-mobile", label: "Analyses mobiles", icon: Smartphone, area: "mobileAnalyses" },
   { href: "/audit", label: "Audit", icon: Shield, area: "audit" },
 ];
 

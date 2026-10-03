@@ -1,16 +1,16 @@
 import type { CurrentUserProfile, UserRole } from "@/types/user-profile";
 
-export type AppArea = "dashboard" | "parcels" | "map" | "comparison" | "missions" | "exports" | "reports" | "configuration" | "users" | "audit" | "analysis" | "organizations";
+export type AppArea = "dashboard" | "parcels" | "map" | "comparison" | "missions" | "exports" | "reports" | "configuration" | "users" | "audit" | "analysis" | "organizations" | "mobileAnalyses";
 
 export const ROLE_AREAS: Record<UserRole, AppArea[]> = {
-  administrateur: ["dashboard", "parcels", "map", "comparison", "missions", "exports", "reports", "users", "audit", "analysis"],
+  administrateur: ["dashboard", "parcels", "map", "comparison", "missions", "mobileAnalyses", "exports", "reports", "users", "audit", "analysis"],
   // La Direction On-Premise reçoit une vue agrégée uniquement : aucune parcelle nominative ni carte détaillée.
   direction_ccc: ["dashboard"],
-  agronome_terrain: ["parcels", "map", "comparison", "missions", "analysis"],
-  operateur_terrain: ["parcels", "map", "missions", "analysis"],
+  agronome_terrain: ["parcels", "map", "comparison", "missions", "mobileAnalyses", "analysis"],
+  operateur_terrain: ["parcels", "map", "missions", "mobileAnalyses", "analysis"],
 };
 
-export const PLATFORM_ADMIN_AREAS: AppArea[] = ["dashboard", "organizations", "users", "configuration", "audit"];
+export const PLATFORM_ADMIN_AREAS: AppArea[] = ["dashboard", "organizations", "mobileAnalyses", "users", "configuration", "audit"];
 
 export function areaForPath(pathname: string): AppArea | null {
   if (pathname.startsWith("/dashboard")) return "dashboard";
@@ -25,6 +25,7 @@ export function areaForPath(pathname: string): AppArea | null {
   if (pathname.startsWith("/utilisateurs")) return "users";
   if (pathname.startsWith("/organisations")) return "organizations";
   if (pathname.startsWith("/audit")) return "audit";
+  if (pathname.startsWith("/analyses-mobile")) return "mobileAnalyses";
   return null;
 }
 

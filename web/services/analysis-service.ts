@@ -1,5 +1,5 @@
 import { apiRequest } from "@/lib/api-client";
-import type { Analysis } from "@/types/parcel";
+import type { Analysis, MobileCapture } from "@/types/parcel";
 
 export type CreateAnalysisContext = {
   missionId?: string;
@@ -35,6 +35,10 @@ export const analysisService = {
       method: "POST",
       body: formData,
     });
+  },
+
+  listMobileCaptures(): Promise<MobileCapture[]> {
+    return apiRequest<MobileCapture[]>("/v1/analyses/mobile");
   },
 
   imageFileUrl(imageId: string): string {
