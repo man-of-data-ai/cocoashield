@@ -23,6 +23,7 @@ export class ConfigService {
         { ...this.envConfig, ...config, ...process.env },
         ConfigSchema,
       );
+      this.assertModelExists();
       return;
     }
 
@@ -30,6 +31,17 @@ export class ConfigService {
       { ...this.envConfig, ...process.env },
       ConfigSchema,
     );
+    this.assertModelExists();
+  }
+
+  // Sans ce contrôle, un chemin faux ne se voit qu'à la première image
+  // analysée, sous la forme d'une image en échec.
+  private assertModelExists(): void {
+    if (!fs.existsSync(this.envConfig.MODEL_PATH)) {
+      throw new Error(
+        `MODEL_PATH pointe sur un fichier introuvable : ${this.envConfig.MODEL_PATH}`,
+      );
+    }
   }
 
   get nodeEnv(): Environment {
