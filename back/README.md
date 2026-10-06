@@ -110,7 +110,7 @@ npm run start:dev
 
 `auth:migrate` prépare les tables Better Auth et `seed:demo` démarre un contexte Nest temporaire qui synchronise les entités TypeORM avant d'insérer les données. Le backend reste ensuite disponible sur `http://localhost:3000`.
 
-Le seed est réexécutable. Il crée trois profils correspondant exactement aux rôles de l'application et des jeux de données pour les parcelles, missions, analyses, images, imports en attente, exports, audit et configuration.
+Le seed est réexécutable. Il crée trois profils correspondant exactement aux rôles de l'application et des jeux de données pour les parcelles, missions, exports, audit et configuration. Il ne crée aucune analyse : un verdict n'existe que s'il sort du modèle, après un envoi d'images.
 
 Comptes de test (mot de passe commun : `CocoaDemo2026!`) :
 
