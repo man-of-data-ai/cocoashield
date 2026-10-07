@@ -66,8 +66,9 @@ export class ConfigSchema {
   @IsString()
   UPLOADS_DIR: string = './uploads';
 
+  // Sans valeur par défaut : un serveur sans modèle ne doit pas démarrer.
   @IsString()
-  MODEL_PATH: string = '../model/v3/cocoashield_v3.onnx';
+  MODEL_PATH: string;
 
   @IsString()
   MODEL_VERSION: string = 'v3';
