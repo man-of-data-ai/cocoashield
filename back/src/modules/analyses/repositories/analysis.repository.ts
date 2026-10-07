@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Analysis } from '../entities/analysis.entity';
+import { Analysis, AnalysisStatus } from '../entities/analysis.entity';
 
 @Injectable()
 export class AnalysisRepository {
@@ -27,6 +27,15 @@ export class AnalysisRepository {
       relations: { images: true, parcel: true, mission: true },
       order: { completedAt: 'DESC' },
     });
+  }
+
+  /** Faux si l'analyse n'était plus en attente : deux lancements simultanés ne passent pas tous les deux. */
+  async markStarted(id: string): Promise<boolean> {
+    const { affected } = await this.repository.update(
+      { id, status: AnalysisStatus.PENDING },
+      { status: AnalysisStatus.PROCESSING },
+    );
+    return affected === 1;
   }
 
   async update(id: string, data: Partial<Analysis>): Promise<void> {

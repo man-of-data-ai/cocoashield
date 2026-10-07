@@ -1,6 +1,7 @@
 import { InjectQueue } from '@nestjs/bullmq';
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -53,6 +54,8 @@ export class AnalysesService {
     missionId?: string,
     missionName?: string,
     profileId?: string,
+    // Faux : les photos sont chargées, l'analyse attend `start`.
+    start = true,
   ): Promise<Analysis> {
     if (files.length === 0) {
       throw new BadRequestException('At least one image is required');
@@ -86,11 +89,11 @@ export class AnalysesService {
       ownerId,
       // Posé avant la mise en file : l'inférence peut finaliser l'analyse
       // dès le premier job traité.
-      status: AnalysisStatus.PROCESSING,
+      status: start ? AnalysisStatus.PROCESSING : AnalysisStatus.PENDING,
       missionId: mission?.id ?? null,
       profileId: profileId ?? null,
     });
-    if (parcelId) await this.parcelsService.updateStatus(parcelId, ParcelStatus.ANALYZING);
+    if (parcelId && start) await this.parcelsService.updateStatus(parcelId, ParcelStatus.ANALYZING);
 
     const imageIds: string[] = [];
     for (let index = 0; index < files.length; index += 1) {
@@ -126,11 +129,26 @@ export class AnalysesService {
 
     // Toutes les images existent avant le premier job : sinon finalizeIfDone
     // clôturerait l'analyse sans les images pas encore créées.
-    for (const analysisImageId of imageIds) {
-      await this.imageInferenceQueue.add('classify', { analysisImageId });
+    if (start) {
+      for (const analysisImageId of imageIds) {
+        await this.imageInferenceQueue.add('classify', { analysisImageId });
+      }
     }
 
     return this.findOne(analysis.id);
+  }
+
+  /** Lance l'analyse d'un lot de photos chargé sans lancement. */
+  async start(id: string, actorId: string): Promise<Analysis> {
+    const analysis = await this.findOneForOwner(id, actorId);
+    if (!(await this.analysisRepository.markStarted(id))) {
+      throw new ConflictException('Cette analyse a déjà été lancée.');
+    }
+    if (analysis.parcelId) await this.parcelsService.updateStatus(analysis.parcelId, ParcelStatus.ANALYZING);
+    for (const image of analysis.images) {
+      await this.imageInferenceQueue.add('classify', { analysisImageId: image.id });
+    }
+    return this.findOne(id);
   }
 
   async createFromCapture(

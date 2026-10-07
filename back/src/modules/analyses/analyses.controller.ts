@@ -48,6 +48,7 @@ export class ParcelAnalysesController {
     @Body('missionId') missionId?: string,
     @Body('missionName') missionName?: string,
     @Body('profileId') profileId?: string,
+    @Body('start') start?: string,
   ) {
     const results = parseImageMetas(resultsJson);
     return this.analysesService.create(
@@ -58,6 +59,7 @@ export class ParcelAnalysesController {
       missionId,
       missionName,
       profileId,
+      start !== 'false',
     );
   }
 
@@ -96,6 +98,11 @@ export class AnalysesController {
   @Get(routes.analyses.byId)
   findOne(@Session() session: UserSession, @Param('id') id: string) {
     return this.analysesService.findOneForOwner(id, session.user.id);
+  }
+
+  @Post(routes.analyses.start)
+  start(@Session() session: UserSession, @Param('id') id: string) {
+    return this.analysesService.start(id, session.user.id);
   }
 
   @Patch(routes.analyses.byId)
