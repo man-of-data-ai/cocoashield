@@ -80,18 +80,21 @@ export class AnalysesService {
 
     const analysis = await this.analysisRepository.create({
       parcelId,
-      status: AnalysisStatus.PENDING,
+      // Posé avant la mise en file : l'inférence peut finaliser l'analyse
+      // dès le premier job traité.
+      status: AnalysisStatus.PROCESSING,
       missionId: mission?.id ?? null,
       profileId: profileId ?? null,
     });
+    await this.parcelsService.updateStatus(parcelId, ParcelStatus.ANALYZING);
 
-    let hasPendingImage = false;
-
+    const imageIds: string[] = [];
     for (let index = 0; index < files.length; index += 1) {
       const file = files[index];
       const meta = imageMetas[index];
-      const isPreClassified =
-        meta?.source === AnalysisImageSource.MOBILE && meta.result;
+      // Le verdict du téléphone est gardé à part : le serveur ré-analyse
+      // toujours l'image, et c'est son verdict qui alimente l'analyse.
+      const isMobile = meta?.source === AnalysisImageSource.MOBILE;
       const gps = resolvePosition(await this.imageGeoService.extractGps(file.path), meta);
 
       const geolocationQuality = gps?.geolocationQuality ?? GeolocationQuality.NONE;
@@ -100,11 +103,9 @@ export class AnalysesService {
         analysisId: analysis.id,
         filePath: path.basename(file.path),
         source: meta?.source ?? AnalysisImageSource.UPLOAD,
-        status: isPreClassified
-          ? AnalysisImageStatus.PROCESSED
-          : AnalysisImageStatus.PENDING,
-        result: isPreClassified ? meta.result! : null,
-        confidence: isPreClassified ? (meta.confidence ?? null) : null,
+        status: AnalysisImageStatus.PENDING,
+        mobileResult: isMobile ? (meta.result ?? null) : null,
+        mobileConfidence: isMobile ? (meta.confidence ?? null) : null,
         latitude: gps?.latitude ?? null,
         longitude: gps?.longitude ?? null,
         geolocationQuality,
@@ -116,23 +117,13 @@ export class AnalysesService {
         geolocationPrecisionM: gps?.geolocationPrecisionM ?? null,
       });
 
-      if (!isPreClassified) {
-        hasPendingImage = true;
-        await this.imageInferenceQueue.add('classify', {
-          analysisImageId: image.id,
-        });
-      }
+      imageIds.push(image.id);
     }
 
-    await this.parcelsService.updateStatus(parcelId, ParcelStatus.ANALYZING);
-    await this.analysisRepository.update(analysis.id, {
-      status: hasPendingImage
-        ? AnalysisStatus.PROCESSING
-        : AnalysisStatus.PENDING,
-    });
-
-    if (!hasPendingImage) {
-      await this.finalizeIfDone(analysis.id);
+    // Toutes les images existent avant le premier job : sinon finalizeIfDone
+    // clôturerait l'analyse sans les images pas encore créées.
+    for (const analysisImageId of imageIds) {
+      await this.imageInferenceQueue.add('classify', { analysisImageId });
     }
 
     return this.findOne(analysis.id);
