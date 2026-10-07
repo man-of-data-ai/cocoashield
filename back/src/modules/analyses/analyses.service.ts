@@ -11,6 +11,8 @@ import { MissionsService } from '../missions/missions.service';
 import { ParcelStatus } from '../parcels/entities/parcel.entity';
 import { ParcelsService } from '../parcels/parcels.service';
 import { PlatformConfigService } from '../platform-config/platform-config.service';
+import { UserRole } from '../users/entities/user-profile.entity';
+import { UsersService } from '../users/users.service';
 import { IMAGE_INFERENCE_QUEUE, ImageInferenceJob } from './analyses.constants';
 import { AnalysisImageMeta } from './dtos/create-analysis.dto';
 import {
@@ -40,10 +42,11 @@ export class AnalysesService {
     private readonly platformConfigService: PlatformConfigService,
     @InjectQueue(IMAGE_INFERENCE_QUEUE)
     private readonly imageInferenceQueue: Queue<ImageInferenceJob>,
+    private readonly usersService: UsersService,
   ) {}
 
   async create(
-    parcelId: string,
+    parcelId: string | null,
     ownerId: string,
     files: Express.Multer.File[],
     imageMetas: AnalysisImageMeta[],
@@ -61,7 +64,7 @@ export class AnalysesService {
     }
 
     // Access check: the parcel must belong to the caller's organizational scope.
-    const parcel = await this.parcelsService.findOneForOwner(parcelId, ownerId);
+    const parcel = parcelId ? await this.parcelsService.findOneForOwner(parcelId, ownerId) : null;
 
     if (profileId) {
       await this.platformConfigService.getActiveDroneProfile(
@@ -74,19 +77,20 @@ export class AnalysesService {
       ownerId,
       missionId,
     );
-    if (mission?.organizationId && parcel.organizationId && mission.organizationId !== parcel.organizationId) {
+    if (mission?.organizationId && parcel?.organizationId && mission.organizationId !== parcel.organizationId) {
       throw new BadRequestException('La mission et la parcelle doivent appartenir à la même organisation.');
     }
 
     const analysis = await this.analysisRepository.create({
       parcelId,
+      ownerId,
       // Posé avant la mise en file : l'inférence peut finaliser l'analyse
       // dès le premier job traité.
       status: AnalysisStatus.PROCESSING,
       missionId: mission?.id ?? null,
       profileId: profileId ?? null,
     });
-    await this.parcelsService.updateStatus(parcelId, ParcelStatus.ANALYZING);
+    if (parcelId) await this.parcelsService.updateStatus(parcelId, ParcelStatus.ANALYZING);
 
     const imageIds: string[] = [];
     for (let index = 0; index < files.length; index += 1) {
@@ -160,8 +164,22 @@ export class AnalysesService {
 
   async findOneForOwner(id: string, ownerId: string): Promise<Analysis> {
     const analysis = await this.findOne(id);
-    await this.parcelsService.findOneForOwner(analysis.parcelId, ownerId);
+    await this.assertCanAccess(analysis, ownerId);
     return analysis;
+  }
+
+  /** Via la parcelle ; sans parcelle, l'auteur, les comptes qui le voient et le super-admin. */
+  private async assertCanAccess(analysis: Pick<Analysis, 'parcelId' | 'ownerId'>, actorId: string): Promise<void> {
+    if (analysis.parcelId) {
+      await this.parcelsService.findOneForOwner(analysis.parcelId, actorId);
+      return;
+    }
+    if (analysis.ownerId === actorId) return;
+    const scope = await this.usersService.getAccessScope(actorId);
+    if (scope.isPlatformAdmin) return;
+    // Même règle que la liste : les captures hors parcelle des comptes visibles.
+    if (scope.role !== UserRole.DIRECTION_CCC && analysis.ownerId && (await this.usersService.visibleUserIdsForActor(actorId)).includes(analysis.ownerId)) return;
+    throw new NotFoundException('Analysis not found');
   }
 
   async updateNotes(
@@ -184,7 +202,7 @@ export class AnalysesService {
   ): Promise<{ absolutePath: string; filename: string }> {
     const image = await this.analysisImageRepository.findByIdWithOwner(imageId);
     if (!image) throw new NotFoundException('Image not found');
-    await this.parcelsService.findOneForOwner(image.analysis.parcelId, ownerId);
+    await this.assertCanAccess(image.analysis, ownerId);
 
     return {
       absolutePath: path.join(this.configService.uploadsDir, image.filePath),
@@ -198,14 +216,17 @@ export class AnalysesService {
     const stillPending = analysis.images.some((image: AnalysisImage) => image.status === AnalysisImageStatus.PENDING);
     if (stillPending) return;
 
-    const settings = await this.platformConfigService.getSettings(analysis.parcel.ownerId);
+    // Une analyse sans parcelle a toujours un auteur (owner_id posé à la création).
+    const settings = await this.platformConfigService.getSettings(analysis.parcel?.ownerId ?? analysis.ownerId!);
     const processedRaw = analysis.images.filter((image: AnalysisImage) => image.status === AnalysisImageStatus.PROCESSED && image.result !== null);
     const processed = this.deduplicate(processedRaw, settings.dedupDistanceM, settings.dedupWindowS);
     const infected = processed.filter((image) => image.result === AnalysisResult.INFECTED);
     const infectionPercentage = processed.length > 0 ? (infected.length / processed.length) * 100 : 0;
     const infectionRate = infectionPercentage / 100;
     const severityLevel = this.severityLevel(infectionRate, settings);
-    const previous = (await this.analysisRepository.findCompletedByParcel(analysis.parcelId)).find((item) => item.id !== analysisId) ?? null;
+    const previous = analysis.parcelId
+      ? (await this.analysisRepository.findCompletedByParcel(analysis.parcelId)).find((item) => item.id !== analysisId) ?? null
+      : null;
     const affectedZones = this.buildZones(processed, infected, settings.clusteringRadiusM, settings.minImagesPerZone, settings, previous);
     const isInfected = infected.length > 0;
     const completedAt = new Date();
@@ -219,7 +240,9 @@ export class AnalysesService {
       affectedZones,
       reportGeneratedAt: completedAt,
     });
-    await this.parcelsService.updateStatus(analysis.parcelId, isInfected ? ParcelStatus.SICK : ParcelStatus.HEALTHY);
+    if (analysis.parcelId) {
+      await this.parcelsService.updateStatus(analysis.parcelId, isInfected ? ParcelStatus.SICK : ParcelStatus.HEALTHY);
+    }
   }
 
   private severityLevel(rate: number, settings: { severityModerate: number; severityHigh: number; severityCritical: number }): 'faible'|'modere'|'eleve'|'critique' {

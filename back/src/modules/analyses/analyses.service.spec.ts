@@ -18,6 +18,7 @@ function build(exif: { latitude: number; longitude: number } | null = null) {
     null as never,
     null as never,
     null as never,
+    null as never,
   );
   const create = jest.spyOn(service, 'create').mockResolvedValue({ id: 'a1' } as never);
   return { service, parcelsService, create };
@@ -82,6 +83,7 @@ describe('AnalysesService.create', () => {
       { resolve: jest.fn().mockResolvedValue(null) } as never,
       null as never,
       queue as never,
+      null as never,
     );
     jest.spyOn(service, 'findOne').mockResolvedValue({ id: 'a1' } as never);
 
@@ -94,5 +96,32 @@ describe('AnalysesService.create', () => {
     expect(images[0]).not.toHaveProperty('result');
     expect(images[1]).toMatchObject({ mobileResult: null, mobileConfidence: null });
     expect(queue.add.mock.calls.map(([, job]) => job)).toEqual([{ analysisImageId: 'img1' }, { analysisImageId: 'img2' }]);
+  });
+});
+
+describe('AnalysesService.create without a parcel', () => {
+  it('keeps the capture, records its author and leaves every parcel untouched', async () => {
+    const analysisRepo = { create: jest.fn().mockResolvedValue({ id: 'a1' }) };
+    const parcelsService = { findOneForOwner: jest.fn(), updateStatus: jest.fn() };
+    const queue = { add: jest.fn() };
+    const service = new AnalysesService(
+      analysisRepo as never,
+      { create: jest.fn().mockResolvedValue({ id: 'img1' }) } as never,
+      parcelsService as never,
+      { extractGps: jest.fn().mockResolvedValue(null) } as never,
+      null as never,
+      { resolve: jest.fn().mockResolvedValue(null) } as never,
+      null as never,
+      queue as never,
+      null as never,
+    );
+    jest.spyOn(service, 'findOne').mockResolvedValue({ id: 'a1' } as never);
+
+    await service.create(null, 'u1', FILES, [{ source: AnalysisImageSource.MOBILE, result: AnalysisResult.HEALTHY }]);
+
+    expect(analysisRepo.create).toHaveBeenCalledWith(expect.objectContaining({ parcelId: null, ownerId: 'u1' }));
+    expect(parcelsService.findOneForOwner).not.toHaveBeenCalled();
+    expect(parcelsService.updateStatus).not.toHaveBeenCalled();
+    expect(queue.add).toHaveBeenCalledWith('classify', { analysisImageId: 'img1' });
   });
 });
