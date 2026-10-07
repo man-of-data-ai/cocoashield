@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { Dimensions, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Canvas, Image, useImage } from '@shopify/react-native-skia';
 import { buildHeatmapImage } from '../utils/heatmapImage';
+import { fitBox } from '../utils/fitBox';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const PANEL_SIZE = Math.min(SCREEN_WIDTH - 48, 340);
@@ -9,14 +10,16 @@ const PANEL_SIZE = Math.min(SCREEN_WIDTH - 48, 340);
 function AnalyzedCanvas({
   imageUri,
   grid,
-  size,
+  width,
+  height,
 }: {
   imageUri: string;
   grid: number[][];
-  size: number;
+  width: number;
+  height: number;
 }) {
   const photo = useImage(imageUri);
-  const heatmapRes = Math.min(160, Math.round(size));
+  const heatmapRes = Math.min(160, Math.round(width));
   const heatmap = useMemo(
     () => buildHeatmapImage(grid, heatmapRes),
     [grid, heatmapRes]
@@ -25,10 +28,10 @@ function AnalyzedCanvas({
   if (!photo) return null;
 
   return (
-    <Canvas style={{ width: size, height: size }}>
-      <Image image={photo} x={0} y={0} width={size} height={size} fit="cover" />
+    <Canvas style={{ width, height }}>
+      <Image image={photo} x={0} y={0} width={width} height={height} fit="fill" />
       {heatmap && (
-        <Image image={heatmap} x={0} y={0} width={size} height={size} fit="fill" />
+        <Image image={heatmap} x={0} y={0} width={width} height={height} fit="fill" />
       )}
     </Canvas>
   );
@@ -38,13 +41,16 @@ export function StackedComparisonModal({
   visible,
   onClose,
   imageUri,
+  imageAspect,
   grid,
 }: {
   visible: boolean;
   onClose: () => void;
   imageUri: string | null;
+  imageAspect: number;
   grid: number[][] | null;
 }) {
+  const panel = fitBox(PANEL_SIZE, PANEL_SIZE, imageAspect);
   return (
     <Modal
       visible={visible}
@@ -64,18 +70,18 @@ export function StackedComparisonModal({
           <View style={styles.panelsContainer}>
             <View style={styles.panel}>
               <Text style={styles.panelLabel}>Photo originale</Text>
-              <View style={[styles.imageBox, { width: PANEL_SIZE, height: PANEL_SIZE }]}>
-                <Canvas style={{ width: PANEL_SIZE, height: PANEL_SIZE }}>
-                  <OriginalImage imageUri={imageUri} size={PANEL_SIZE} />
+              <View style={[styles.imageBox, panel]}>
+                <Canvas style={panel}>
+                  <OriginalImage imageUri={imageUri} {...panel} />
                 </Canvas>
               </View>
             </View>
 
             <View style={styles.panel}>
               <Text style={styles.panelLabel}>Avec heatmap (zones analysees)</Text>
-              <View style={[styles.imageBox, { width: PANEL_SIZE, height: PANEL_SIZE }]}>
+              <View style={[styles.imageBox, panel]}>
                 {grid && (
-                  <AnalyzedCanvas imageUri={imageUri} grid={grid} size={PANEL_SIZE} />
+                  <AnalyzedCanvas imageUri={imageUri} grid={grid} {...panel} />
                 )}
               </View>
             </View>
@@ -86,10 +92,10 @@ export function StackedComparisonModal({
   );
 }
 
-function OriginalImage({ imageUri, size }: { imageUri: string; size: number }) {
+function OriginalImage({ imageUri, width, height }: { imageUri: string; width: number; height: number }) {
   const photo = useImage(imageUri);
   if (!photo) return null;
-  return <Image image={photo} x={0} y={0} width={size} height={size} fit="cover" />;
+  return <Image image={photo} x={0} y={0} width={width} height={height} fit="fill" />;
 }
 
 const styles = StyleSheet.create({
