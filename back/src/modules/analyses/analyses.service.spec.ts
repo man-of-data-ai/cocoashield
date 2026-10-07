@@ -125,3 +125,48 @@ describe('AnalysesService.create without a parcel', () => {
     expect(queue.add).toHaveBeenCalledWith('classify', { analysisImageId: 'img1' });
   });
 });
+
+describe('AnalysesService loading photos before starting', () => {
+  function buildLoaded() {
+    const analysisRepo = {
+      create: jest.fn().mockResolvedValue({ id: 'a1' }),
+      markStarted: jest.fn().mockResolvedValueOnce(true).mockResolvedValue(false),
+    };
+    const parcelsService = { findOneForOwner: jest.fn().mockResolvedValue({ organizationId: null }), updateStatus: jest.fn() };
+    const queue = { add: jest.fn() };
+    const service = new AnalysesService(
+      analysisRepo as never,
+      { create: jest.fn().mockResolvedValue({ id: 'img1' }) } as never,
+      parcelsService as never,
+      { extractGps: jest.fn().mockResolvedValue(null) } as never,
+      null as never,
+      { resolve: jest.fn().mockResolvedValue(null) } as never,
+      null as never,
+      queue as never,
+      null as never,
+    );
+    jest.spyOn(service, 'findOne').mockResolvedValue({ id: 'a1', parcelId: 'p1', images: [{ id: 'img1' }] } as never);
+    return { service, analysisRepo, parcelsService, queue };
+  }
+
+  it('keeps the analysis pending and queues nothing when start is false', async () => {
+    const { service, analysisRepo, parcelsService, queue } = buildLoaded();
+
+    await service.create('p1', 'u1', FILES, [], undefined, undefined, undefined, false);
+
+    expect(analysisRepo.create).toHaveBeenCalledWith(expect.objectContaining({ status: 'pending' }));
+    expect(parcelsService.updateStatus).not.toHaveBeenCalled();
+    expect(queue.add).not.toHaveBeenCalled();
+  });
+
+  it('queues every image on start, and refuses a second start', async () => {
+    const { service, parcelsService, queue } = buildLoaded();
+
+    await service.start('a1', 'u1');
+
+    expect(parcelsService.updateStatus).toHaveBeenCalledWith('p1', 'analyzing');
+    expect(queue.add).toHaveBeenCalledWith('classify', { analysisImageId: 'img1' });
+    await expect(service.start('a1', 'u1')).rejects.toThrow('Cette analyse a déjà été lancée.');
+    expect(queue.add).toHaveBeenCalledTimes(1);
+  });
+});

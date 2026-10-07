@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { Activity, Camera, MapPinned, Route, Ruler } from "lucide-react";
 
 import AnalysisList from "@/components/analyses/AnalysisList";
+import NewAnalysisDialog from "@/components/analyses/NewAnalysisDialog";
 import AppShell from "@/components/layout/AppShell";
 import Alert from "@/components/ui/Alert";
 import Spinner from "@/components/ui/Spinner";
@@ -13,11 +14,16 @@ import StatusBadge from "@/components/ui/StatusBadge";
 import { useParcelMetrics } from "@/hooks/useParcelMetrics";
 import { ApiError } from "@/lib/api-client";
 import { formatArea, formatDistance } from "@/lib/geo";
+import { analysisService } from "@/services/analysis-service";
 import { parcelService } from "@/services/parcel-service";
 import type { Analysis, Parcel } from "@/types/parcel";
 
 export default function ParcelDetailPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
+  const [analysisDialogOpen,setAnalysisDialogOpen]=useState(false);
+  const [startingId,setStartingId]=useState<string|null>(null);
+  const [startError,setStartError]=useState<string|null>(null);
   const [parcel,setParcel]=useState<Parcel|null>(null);
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState<string|null>(null);
@@ -32,6 +38,29 @@ export default function ParcelDetailPage() {
     return()=>{mounted=false};
   },[params.id]);
 
+  // Tant qu'une analyse tourne, la page se rafraîchit seule : le verdict
+  // arrive sans rechargement, comme sur la page de l'analyse.
+  const processing=parcel?.analyses?.some((analysis)=>analysis.status==="processing")??false;
+  useEffect(()=>{
+    if(!processing) return;
+    const timer=window.setInterval(()=>{parcelService.getParcel(params.id).then(setParcel).catch(()=>undefined);},3000);
+    return()=>window.clearInterval(timer);
+  },[processing,params.id]);
+
+  const analysisHref=(analysisId:string)=>`/parcels/${params.id}/analyses/${analysisId}`;
+
+  async function startAnalysis(analysis: Analysis){
+    setStartingId(analysis.id);setStartError(null);
+    try{await analysisService.startAnalysis(analysis.id);router.push(analysisHref(analysis.id));}
+    catch(e){setStartError(e instanceof ApiError?e.message:"Impossible de lancer l’analyse.");setStartingId(null);}
+  }
+
+  // Lancée : on suit les verdicts sur la page de l'analyse. Seulement chargée : elle attend dans la liste.
+  function onAnalysisCreated(analysis: Analysis){
+    if(analysis.status!=="pending"){router.push(analysisHref(analysis.id));return;}
+    setParcel((current)=>current&&{...current,analyses:[analysis,...(current.analyses??[])]});
+  }
+
   const relatedMissions = useMemo(() => {
     if (!parcel?.analyses) return [];
     const seen = new Map<string, NonNullable<Analysis["mission"]>>();
@@ -45,7 +74,7 @@ export default function ParcelDetailPage() {
   return <AppShell title={parcel.name} headerActions={<StatusBadge status={parcel.status}/>}> 
     <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
       <Link href="/parcels" className="text-sm font-semibold text-slate-500 hover:text-[#244B32]">← Parcelles</Link>
-      
+      <button type="button" onClick={()=>setAnalysisDialogOpen(true)} className="inline-flex items-center gap-2 rounded-2xl bg-[#244B32] px-5 py-2.5 text-sm font-bold text-white hover:bg-[#356A46]"><Camera className="h-4 w-4"/>Nouvelle analyse</button>
     </div>
 
     {metrics&&<div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -53,15 +82,17 @@ export default function ParcelDetailPage() {
 
     <div className="mb-5 grid gap-5 xl:grid-cols-[minmax(0,1.6fr)_360px]">
       <section className="rounded-[26px] border border-[#E2E9DE] bg-white p-5 shadow-sm">
-        <div className="mb-4"><h2 className="text-base font-bold text-slate-900">Historique des analyses</h2><p className="mt-1 text-xs text-slate-400">Chaque analyse est reliée à une mission, à ses observations et au rapport généré.</p></div>
-        <AnalysisList parcelId={parcel.id} analyses={parcel.analyses??[]}/>
+        <div className="mb-4"><h2 className="text-base font-bold text-slate-900">Historique des analyses</h2><p className="mt-1 text-xs text-slate-400">Chaque analyse garde ses photos, ses observations et le rapport généré.</p></div>
+        {startError&&<div className="mb-3"><Alert variant="error">{startError}</Alert></div>}
+        <AnalysisList parcelId={parcel.id} analyses={parcel.analyses??[]} onStart={startAnalysis} startingId={startingId}/>
       </section>
       <aside className="rounded-[26px] border border-[#E2E9DE] bg-white p-5 shadow-sm">
         <div className="flex items-center gap-2"><Route className="h-4 w-4 text-[#668A4C]"/><h2 className="text-sm font-bold text-slate-900">Missions liées</h2></div>
-        {relatedMissions.length === 0 ? <p className="mt-4 rounded-2xl bg-slate-50 p-4 text-xs leading-5 text-slate-500">Aucune mission n’est encore associée à cette parcelle. La prochaine analyse devra être rattachée à une mission de collecte.</p> : <div className="mt-3 space-y-2">{relatedMissions.map((mission)=><Link key={mission.id} href={`/missions?mission=${mission.id}`} className="block rounded-2xl border border-[#E6EBE2] px-3 py-3 transition hover:border-[#C5D5BD] hover:bg-[#F8FAF6]"><p className="text-xs font-bold text-slate-800">{mission.name}</p><p className="mt-1 text-[11px] text-slate-400">{new Date(mission.missionDate??mission.createdAt).toLocaleDateString("fr-FR")}</p></Link>)}</div>}
+        {relatedMissions.length === 0 ? <p className="mt-4 rounded-2xl bg-slate-50 p-4 text-xs leading-5 text-slate-500">Aucune mission n’est encore associée à cette parcelle.</p> : <div className="mt-3 space-y-2">{relatedMissions.map((mission)=><Link key={mission.id} href={`/missions?mission=${mission.id}`} className="block rounded-2xl border border-[#E6EBE2] px-3 py-3 transition hover:border-[#C5D5BD] hover:bg-[#F8FAF6]"><p className="text-xs font-bold text-slate-800">{mission.name}</p><p className="mt-1 text-[11px] text-slate-400">{new Date(mission.missionDate??mission.createdAt).toLocaleDateString("fr-FR")}</p></Link>)}</div>}
         <Link href={`/map?parcel=${parcel.id}`} className="mt-4 inline-flex w-full items-center justify-center rounded-2xl border border-[#D9E5D3] px-4 py-2.5 text-xs font-bold text-[#31583B] hover:bg-[#F6FAF3]">Voir la parcelle sur la carte</Link>
       </aside>
     </div>
 
+    <NewAnalysisDialog open={analysisDialogOpen} onClose={()=>setAnalysisDialogOpen(false)} parcelId={parcel.id} parcelName={parcel.name} onAnalysisCreated={onAnalysisCreated}/>
   </AppShell>;
 }
