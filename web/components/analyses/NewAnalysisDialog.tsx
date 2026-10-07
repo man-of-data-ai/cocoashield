@@ -19,7 +19,7 @@ type Preview = { file: File; url: string };
 
 export default function NewAnalysisDialog({ open, onClose, parcelId, parcelName, fixedMissionId, fixedDroneProfileId, onAnalysisCreated }: Props) {
   const [images,setImages]=useState<File[]>([]);
-  const [missionMode,setMissionMode]=useState<"existing"|"new">("existing");
+  const [missionMode,setMissionMode]=useState<"none"|"existing"|"new">("none");
   const [missionId,setMissionId]=useState("");
   const [missionName,setMissionName]=useState("");
   const [missions,setMissions]=useState<Mission[]>([]);
@@ -35,7 +35,6 @@ export default function NewAnalysisDialog({ open, onClose, parcelId, parcelName,
       if (missionsResult.status === "fulfilled") {
         setMissions(missionsResult.value);
         if (missionsResult.value[0]) setMissionId((value)=>value || missionsResult.value[0].id);
-        if (missionsResult.value.length === 0) setMissionMode("new");
       } else setMissions([]);
     });
   },[open]);
@@ -62,12 +61,14 @@ export default function NewAnalysisDialog({ open, onClose, parcelId, parcelName,
     }catch(e){setError(e instanceof ApiError?e.message:"Impossible de lancer l’analyse.");}finally{setSubmitting(false);}
   }
 
+  const withMission = Boolean(fixedMissionId) || missionMode !== "none";
+
   return <Dialog open={open} onClose={close} title={parcelName ? `Nouvelle analyse · ${parcelName}` : "Nouvelle analyse"}><div className="space-y-6">
-    <div className="rounded-2xl bg-[#F3F7F0] p-4"><div className="flex items-start gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white text-[#5F8740] shadow-sm"><ScanSearch className="h-5 w-5"/></span><div><h3 className="text-sm font-bold text-slate-900">Parcelle → Mission → Analyse</h3><p className="mt-1 text-xs leading-5 text-slate-500">Cette analyse sera rattachée à la parcelle sélectionnée et à une mission de collecte. Les résultats alimenteront ensuite la carte et le rapport associé.</p></div></div></div>
+    <div className="rounded-2xl bg-[#F3F7F0] p-4"><div className="flex items-start gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white text-[#5F8740] shadow-sm"><ScanSearch className="h-5 w-5"/></span><div><h3 className="text-sm font-bold text-slate-900">{withMission ? "Parcelle → Mission → Analyse" : "Parcelle → Analyse"}</h3><p className="mt-1 text-xs leading-5 text-slate-500">Cette analyse sera rattachée à la parcelle sélectionnée{withMission ? " et à une mission de collecte" : ""}. Les résultats alimenteront ensuite la carte et le rapport associé.</p></div></div></div>
 
     {!fixedMissionId && <div>
-      <div className="mb-2 flex items-center justify-between gap-3"><label className="text-xs font-bold text-slate-600">Mission de collecte</label><div className="flex rounded-xl bg-slate-100 p-1 text-[11px] font-bold"><button type="button" onClick={()=>setMissionMode("existing")} disabled={missions.length===0} className={`rounded-lg px-2.5 py-1.5 ${missionMode==="existing"?"bg-white text-[#244B32] shadow-sm":"text-slate-400"}`}>Existante</button><button type="button" onClick={()=>setMissionMode("new")} className={`rounded-lg px-2.5 py-1.5 ${missionMode==="new"?"bg-white text-[#244B32] shadow-sm":"text-slate-400"}`}>Nouvelle</button></div></div>
-      {missionMode === "existing" ? <ModernSelect value={missionId} onChange={setMissionId} searchable placeholder="Sélectionner une mission" options={missions.map((mission)=>({value:mission.id,label:mission.name,description:new Date(mission.missionDate??mission.createdAt).toLocaleDateString("fr-FR")}))}/> : <div className="relative"><Route className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"/><input value={missionName} onChange={(e)=>setMissionName(e.target.value)} placeholder="Ex. Tournée Soubré · Secteur Nord" className="h-11 w-full rounded-2xl border border-[#DDE6D9] bg-white pl-9 pr-3 text-sm outline-none focus:border-[#9BBC89]"/></div>}
+      <div className="mb-2 flex items-center justify-between gap-3"><label className="text-xs font-bold text-slate-600">Mission de collecte</label><div className="flex rounded-xl bg-slate-100 p-1 text-[11px] font-bold"><button type="button" onClick={()=>setMissionMode("none")} className={`rounded-lg px-2.5 py-1.5 ${missionMode==="none"?"bg-white text-[#244B32] shadow-sm":"text-slate-400"}`}>Sans mission</button><button type="button" onClick={()=>setMissionMode("existing")} disabled={missions.length===0} className={`rounded-lg px-2.5 py-1.5 ${missionMode==="existing"?"bg-white text-[#244B32] shadow-sm":"text-slate-400"}`}>Existante</button><button type="button" onClick={()=>setMissionMode("new")} className={`rounded-lg px-2.5 py-1.5 ${missionMode==="new"?"bg-white text-[#244B32] shadow-sm":"text-slate-400"}`}>Nouvelle</button></div></div>
+      {missionMode === "none" ? null : missionMode === "existing" ? <ModernSelect value={missionId} onChange={setMissionId} searchable placeholder="Sélectionner une mission" options={missions.map((mission)=>({value:mission.id,label:mission.name,description:new Date(mission.missionDate??mission.createdAt).toLocaleDateString("fr-FR")}))}/> : <div className="relative"><Route className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"/><input value={missionName} onChange={(e)=>setMissionName(e.target.value)} placeholder="Ex. Tournée Soubré · Secteur Nord" className="h-11 w-full rounded-2xl border border-[#DDE6D9] bg-white pl-9 pr-3 text-sm outline-none focus:border-[#9BBC89]"/></div>}
     </div>}
 
     {!fixedDroneProfileId && <div><label className="mb-1.5 block text-xs font-bold text-slate-600">Profil de drone / détection</label><ModernSelect value={profileId} onChange={setProfileId} options={[{value:"",label:"Détection standard"},...profiles.map((p)=>({value:p.profileId,label:p.profileId,description:`${p.manufacturer} ${p.model}`}))]}/></div>}
