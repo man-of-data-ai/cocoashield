@@ -154,6 +154,30 @@ export class AnalysesService {
     return this.create(parcelId, userId, files, imageMetas, missionId, missionName, profileId);
   }
 
+  /**
+   * Captures mobiles avec le verdict du téléphone et celui du serveur, dans le
+   * périmètre du compte. La Direction est refusée (vue agrégée uniquement).
+   */
+  async listMobileCaptures(actorId: string) {
+    const scope = await this.usersService.getAccessScope(actorId);
+    const images = scope.isPlatformAdmin
+      ? await this.analysisImageRepository.findRecentMobile()
+      : await this.analysisImageRepository.findRecentMobile({
+          // Refuse la Direction, comme pour toute donnée nominative.
+          parcelIds: (await this.parcelsService.findAllForOwner(actorId)).map((parcel) => parcel.id),
+          authorIds: await this.usersService.visibleUserIdsForActor(actorId),
+        });
+
+    // Noms résolus ici : seuls les admins peuvent lister comptes et organisations.
+    const authors = await this.usersService.identitiesByIds([...new Set(images.map((image) => image.analysis.ownerId).filter((id): id is string => Boolean(id)))]);
+    const organizations = await this.usersService.organizationNamesByIds([...new Set(images.map((image) => image.analysis.parcel?.organizationId).filter((id): id is string => Boolean(id)))]);
+    return images.map((image) => ({
+      ...image,
+      author: image.analysis.ownerId ? authors.get(image.analysis.ownerId) ?? null : null,
+      organizationName: image.analysis.parcel?.organizationId ? organizations.get(image.analysis.parcel.organizationId) ?? null : null,
+    }));
+  }
+
   async findOne(id: string): Promise<Analysis> {
     const analysis = await this.analysisRepository.findById(id);
     if (!analysis) {

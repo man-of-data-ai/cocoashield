@@ -26,6 +26,10 @@ export type AnalysisImage = {
   status: AnalysisImageStatus;
   result: AnalysisResult | null;
   confidence: number | null;
+  /** Verdict calculé sur le téléphone ; `result` reste celui du serveur. */
+  mobileResult?: AnalysisResult | null;
+  mobileConfidence?: number | null;
+  modelVersion?: string | null;
   latitude: number | null;
   longitude: number | null;
   geolocationQuality: GeolocationQuality;
@@ -35,6 +39,14 @@ export type AnalysisImage = {
   gimbalRoll?: number | null;
   captureTimestamp?: string | null;
   geolocationPrecisionM?: number | null;
+};
+
+export type MobileCapture = AnalysisImage & {
+  // Résolus par le back : les comptes non admin ne peuvent pas lister comptes et organisations.
+  author: { name: string; email: string } | null;
+  organizationName: string | null;
+  // parcel est nul pour une capture prise hors de toute parcelle.
+  analysis: { id: string; status: Analysis["status"]; parcelId: string | null; ownerId: string | null; parcel: Pick<Parcel, "id" | "name" | "organizationId"> | null };
 };
 
 export type Mission = {
