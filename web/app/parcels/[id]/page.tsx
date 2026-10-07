@@ -14,6 +14,7 @@ import StatusBadge from "@/components/ui/StatusBadge";
 import { useParcelMetrics } from "@/hooks/useParcelMetrics";
 import { ApiError } from "@/lib/api-client";
 import { formatArea, formatDistance } from "@/lib/geo";
+import { analysisService } from "@/services/analysis-service";
 import { parcelService } from "@/services/parcel-service";
 import type { Analysis, Parcel } from "@/types/parcel";
 
@@ -21,6 +22,8 @@ export default function ParcelDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const [analysisDialogOpen,setAnalysisDialogOpen]=useState(false);
+  const [startingId,setStartingId]=useState<string|null>(null);
+  const [startError,setStartError]=useState<string|null>(null);
   const [parcel,setParcel]=useState<Parcel|null>(null);
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState<string|null>(null);
@@ -34,6 +37,20 @@ export default function ParcelDetailPage() {
       .finally(()=>mounted&&setLoading(false));
     return()=>{mounted=false};
   },[params.id]);
+
+  const analysisHref=(analysisId:string)=>`/parcels/${params.id}/analyses/${analysisId}`;
+
+  async function startAnalysis(analysis: Analysis){
+    setStartingId(analysis.id);setStartError(null);
+    try{await analysisService.startAnalysis(analysis.id);router.push(analysisHref(analysis.id));}
+    catch(e){setStartError(e instanceof ApiError?e.message:"Impossible de lancer l’analyse.");setStartingId(null);}
+  }
+
+  // Lancée : on suit les verdicts sur la page de l'analyse. Seulement chargée : elle attend dans la liste.
+  function onAnalysisCreated(analysis: Analysis){
+    if(analysis.status!=="pending"){router.push(analysisHref(analysis.id));return;}
+    setParcel((current)=>current&&{...current,analyses:[analysis,...(current.analyses??[])]});
+  }
 
   const relatedMissions = useMemo(() => {
     if (!parcel?.analyses) return [];
@@ -57,7 +74,8 @@ export default function ParcelDetailPage() {
     <div className="mb-5 grid gap-5 xl:grid-cols-[minmax(0,1.6fr)_360px]">
       <section className="rounded-[26px] border border-[#E2E9DE] bg-white p-5 shadow-sm">
         <div className="mb-4"><h2 className="text-base font-bold text-slate-900">Historique des analyses</h2><p className="mt-1 text-xs text-slate-400">Chaque analyse garde ses photos, ses observations et le rapport généré.</p></div>
-        <AnalysisList parcelId={parcel.id} analyses={parcel.analyses??[]}/>
+        {startError&&<div className="mb-3"><Alert variant="error">{startError}</Alert></div>}
+        <AnalysisList parcelId={parcel.id} analyses={parcel.analyses??[]} onStart={startAnalysis} startingId={startingId}/>
       </section>
       <aside className="rounded-[26px] border border-[#E2E9DE] bg-white p-5 shadow-sm">
         <div className="flex items-center gap-2"><Route className="h-4 w-4 text-[#668A4C]"/><h2 className="text-sm font-bold text-slate-900">Missions liées</h2></div>
@@ -66,6 +84,6 @@ export default function ParcelDetailPage() {
       </aside>
     </div>
 
-    <NewAnalysisDialog open={analysisDialogOpen} onClose={()=>setAnalysisDialogOpen(false)} parcelId={parcel.id} parcelName={parcel.name} onAnalysisCreated={(analysis)=>router.push(`/parcels/${parcel.id}/analyses/${analysis.id}`)}/>
+    <NewAnalysisDialog open={analysisDialogOpen} onClose={()=>setAnalysisDialogOpen(false)} parcelId={parcel.id} parcelName={parcel.name} onAnalysisCreated={onAnalysisCreated}/>
   </AppShell>;
 }

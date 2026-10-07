@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
-import { Camera, ImagePlus, Route, ScanSearch, X } from "lucide-react";
+import { Camera, ImagePlus, Route, ScanSearch, Upload, X } from "lucide-react";
 import Dialog from "@/components/ui/Dialog";
 import ModernSelect from "@/components/ui/ModernSelect";
 import Alert from "@/components/ui/Alert";
@@ -46,8 +46,9 @@ export default function NewAnalysisDialog({ open, onClose, parcelId, parcelName,
   function addFiles(files: FileList|null){if(!files)return; setImages((current)=>[...current,...Array.from(files).filter((f)=>f.type.startsWith("image/"))]);}
   function removeAt(index:number){setImages((current)=>current.filter((_,i)=>i!==index));}
 
-  async function submit(){
-    if(images.length===0){setError("Ajoutez au moins une photo de feuille pour lancer l’analyse.");return;}
+  // start=false : les photos sont chargées, l’analyse sera lancée plus tard.
+  async function submit(start: boolean){
+    if(images.length===0){setError("Ajoutez au moins une photo de feuille.");return;}
     if(!fixedMissionId && missionMode === "existing" && !missionId){setError("Sélectionnez la mission correspondant à cette collecte terrain.");return;}
     if(!fixedMissionId && missionMode === "new" && !missionName.trim()){setError("Donnez un nom à la mission de collecte.");return;}
     setSubmitting(true);setError(null);
@@ -56,9 +57,10 @@ export default function NewAnalysisDialog({ open, onClose, parcelId, parcelName,
         missionId: fixedMissionId || (missionMode === "existing" ? missionId : undefined),
         missionName: fixedMissionId ? undefined : (missionMode === "new" ? missionName : undefined),
         profileId: fixedDroneProfileId || profileId,
+        start,
       });
       onAnalysisCreated(analysis);close();
-    }catch(e){setError(e instanceof ApiError?e.message:"Impossible de lancer l’analyse.");}finally{setSubmitting(false);}
+    }catch(e){setError(e instanceof ApiError?e.message:"Impossible d’envoyer les photos.");}finally{setSubmitting(false);}
   }
 
   const withMission = Boolean(fixedMissionId) || missionMode !== "none";
@@ -76,6 +78,6 @@ export default function NewAnalysisDialog({ open, onClose, parcelId, parcelName,
     <label className="flex min-h-32 cursor-pointer flex-col items-center justify-center rounded-3xl border border-dashed border-[#BFD1B5] bg-[#FBFDF9] px-5 py-6 text-center transition hover:border-[#7FA064] hover:bg-[#F7FAF4]"><ImagePlus className="h-7 w-7 text-[#668A4C]"/><span className="mt-2 text-sm font-bold text-slate-800">Ajouter les photos de l’analyse</span><span className="mt-1 text-xs text-slate-400">Les coordonnées GPS présentes dans les fichiers seront conservées</span><input type="file" accept="image/*" multiple className="hidden" onChange={(e)=>addFiles(e.target.files)}/></label>
     {previews.length>0&&<div><div className="mb-2 flex items-center justify-between"><p className="text-xs font-bold uppercase tracking-wider text-slate-400">Aperçu</p><span className="rounded-full bg-[#EDF5E8] px-2.5 py-1 text-[11px] font-bold text-[#56773F]">{previews.length} photo{previews.length>1?"s":""}</span></div><div className="grid grid-cols-2 gap-3 sm:grid-cols-3">{previews.map((preview,index)=><div key={`${preview.file.name}-${index}`} className="group relative overflow-hidden rounded-2xl border border-[#E1E8DD] bg-white"><Image src={preview.url} alt={preview.file.name} width={240} height={112} unoptimized className="h-28 w-full object-cover"/><button type="button" onClick={()=>removeAt(index)} className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-white/95 text-slate-600 shadow"><X className="h-3.5 w-3.5"/></button><p className="truncate px-2.5 py-2 text-[10px] font-semibold text-slate-500">{preview.file.name}</p></div>)}</div></div>}
     {error&&<Alert variant="error">{error}</Alert>}
-    <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button type="button" onClick={close} disabled={submitting} className="rounded-2xl border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">Annuler</button><button type="button" onClick={submit} disabled={submitting} className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#244B32] px-6 py-2.5 text-sm font-bold text-white hover:bg-[#356A46] disabled:opacity-60">{submitting?<Spinner label="Analyse en cours..."/>:<><Camera className="h-4 w-4"/>Lancer l’analyse</>}</button></div>
+    <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button type="button" onClick={close} disabled={submitting} className="rounded-2xl border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">Annuler</button><button type="button" onClick={()=>submit(false)} disabled={submitting} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[#D9E5D3] px-5 py-2.5 text-sm font-bold text-[#31583B] hover:bg-[#F6FAF3] disabled:opacity-60"><Upload className="h-4 w-4"/>Charger sans lancer</button><button type="button" onClick={()=>submit(true)} disabled={submitting} className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#244B32] px-6 py-2.5 text-sm font-bold text-white hover:bg-[#356A46] disabled:opacity-60">{submitting?<Spinner label="Envoi des photos..."/>:<><Camera className="h-4 w-4"/>Lancer l’analyse</>}</button></div>
   </div></Dialog>;
 }
