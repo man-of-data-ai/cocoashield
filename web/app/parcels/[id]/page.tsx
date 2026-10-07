@@ -38,6 +38,15 @@ export default function ParcelDetailPage() {
     return()=>{mounted=false};
   },[params.id]);
 
+  // Tant qu'une analyse tourne, la page se rafraîchit seule : le verdict
+  // arrive sans rechargement, comme sur la page de l'analyse.
+  const processing=parcel?.analyses?.some((analysis)=>analysis.status==="processing")??false;
+  useEffect(()=>{
+    if(!processing) return;
+    const timer=window.setInterval(()=>{parcelService.getParcel(params.id).then(setParcel).catch(()=>undefined);},3000);
+    return()=>window.clearInterval(timer);
+  },[processing,params.id]);
+
   const analysisHref=(analysisId:string)=>`/parcels/${params.id}/analyses/${analysisId}`;
 
   async function startAnalysis(analysis: Analysis){
