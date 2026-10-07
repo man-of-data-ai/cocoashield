@@ -13,6 +13,7 @@ export function createAuth(config: ConfigService) {
     basePath: routes.betterAuthBasePath,
     trustedOrigins: [
       config.webUrl,
+      ...config.trustedOrigins,
       `${config.mobileAppScheme}://`,
       `${config.mobileAppScheme}://*`,
       ...(config.isProduction ? [] : ['exp://', 'exp://*', 'exp://*/*']),

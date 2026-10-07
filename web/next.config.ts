@@ -7,6 +7,9 @@ const nextConfig: NextConfig = {
   // et Caddy proxifie web:3000 (voir deploy/Caddyfile).
   output: "standalone",
   turbopack: { root: __dirname },
+  // Dev uniquement : hôtes autorisés à charger les ressources du serveur de dev
+  // (accès depuis le réseau local), ex. ALLOWED_DEV_ORIGINS=192.168.1.105
+  allowedDevOrigins: process.env.ALLOWED_DEV_ORIGINS?.split(",").filter(Boolean),
   async rewrites() {
     return [
       {

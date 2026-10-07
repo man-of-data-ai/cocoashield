@@ -1,4 +1,4 @@
-import { IsEnum, IsIn, IsNumber, IsString, IsUrl } from 'class-validator';
+import { IsEnum, IsIn, IsNumber, IsOptional, IsString, IsUrl } from 'class-validator';
 
 export enum Environment {
   PRODUCTION = 'production',
@@ -45,6 +45,12 @@ export class ConfigSchema {
   // proxy.ts session check, without going through the Next.js rewrite).
   @IsUrl({ require_tld: false })
   WEB_URL: string = 'http://localhost:3002';
+
+  // Origines web supplémentaires, séparées par des virgules : l'application
+  // ouverte à une autre adresse que WEB_URL (IP locale, tunnel ngrok...).
+  @IsOptional()
+  @IsString()
+  TRUSTED_ORIGINS?: string;
 
   @IsString()
   MOBILE_APP_SCHEME: string = 'cocoashield';

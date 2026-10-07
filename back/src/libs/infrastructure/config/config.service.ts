@@ -76,6 +76,10 @@ export class ConfigService {
     return this.envConfig.WEB_URL;
   }
 
+  get trustedOrigins(): string[] {
+    return (this.envConfig.TRUSTED_ORIGINS ?? '').split(',').map((origin) => origin.trim()).filter(Boolean);
+  }
+
   get mobileAppScheme(): string {
     return this.envConfig.MOBILE_APP_SCHEME;
   }
