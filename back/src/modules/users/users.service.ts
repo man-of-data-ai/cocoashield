@@ -104,6 +104,19 @@ export class UsersService {
     return users.filter((user) => !user.isPlatformAdmin && (Boolean(user.organizationId && allowed.has(user.organizationId)) || user.managedOrganizationIds.some((id) => allowed.has(id))));
   }
 
+  /** Nom et email par id, pour afficher l'auteur d'une donnée sans exposer la liste des comptes. */
+  async identitiesByIds(ids: string[]): Promise<Map<string, { name: string; email: string }>> {
+    if (!ids.length) return new Map();
+    const rows: Array<{ id: string; name: string; email: string }> = await this.dataSource.query(`SELECT id, name, email FROM "user" WHERE id = ANY($1)`, [ids]);
+    return new Map(rows.map((row) => [row.id, { name: row.name, email: row.email }]));
+  }
+
+  async organizationNamesByIds(ids: string[]): Promise<Map<string, string>> {
+    if (!ids.length) return new Map();
+    const rows = await this.organizations.find({ select: { id: true, name: true }, where: { id: In(ids) } });
+    return new Map(rows.map((row) => [row.id, row.name]));
+  }
+
   async visibleUserIdsForActor(actorId: string): Promise<string[]> {
     const actor = await this.ensureProfile(actorId);
     if (actor.role === UserRole.ADMINISTRATEUR) return (await this.listForAdmin(actorId)).map((user) => user.id);

@@ -22,6 +22,7 @@ import { useCamHeatmap } from './src/hooks/useCamHeatmap';
 import { BeforeAfterSlider } from './src/components/BeforeAfterSlider';
 import { StackedComparisonModal } from './src/components/StackedComparisonModal';
 import { ResultCard } from './src/components/ResultCard';
+import { fitBox } from './src/utils/fitBox';
 import type { CocoaShieldResult } from './src/hooks/useCamHeatmap';
 
 const IMAGE_BOX_SIZE = Math.min(Dimensions.get('window').width - 40, 360);
@@ -29,6 +30,8 @@ const IMAGE_BOX_SIZE = Math.min(Dimensions.get('window').width - 40, 360);
 export default function App() {
   const { state, analyze } = useCamHeatmap();
   const [imageUri, setImageUri] = useState<string | null>(null);
+  // hauteur / largeur de la photo : le recadrage est libre, plus forcément carré.
+  const [imageAspect, setImageAspect] = useState(1);
   const [result, setResult] = useState<CocoaShieldResult | null>(null);
   const [camGrid, setCamGrid] = useState<number[][] | null>(null);
   const [isClassifying, setIsClassifying] = useState(false);
@@ -57,8 +60,10 @@ export default function App() {
     }
   }
 
-  async function runAnalysis(uri: string) {
+  async function runAnalysis(asset: ImagePicker.ImagePickerAsset) {
+    const uri = asset.uri;
     setImageUri(uri);
+    setImageAspect(asset.width && asset.height ? asset.height / asset.width : 1);
     setResult(null);
     setCamGrid(null);
     setSent(false);
@@ -86,10 +91,9 @@ export default function App() {
     const result = await ImagePicker.launchCameraAsync({
       quality: 0.8,
       allowsEditing: true,
-      aspect: [1, 1],
     });
     if (!result.canceled && result.assets[0]) {
-      runAnalysis(result.assets[0].uri);
+      runAnalysis(result.assets[0]);
     }
   }
 
@@ -106,10 +110,9 @@ export default function App() {
       mediaTypes: ['images'],
       quality: 0.8,
       allowsEditing: true,
-      aspect: [1, 1],
     });
     if (!result.canceled && result.assets[0]) {
-      runAnalysis(result.assets[0].uri);
+      runAnalysis(result.assets[0]);
     }
   }
 
@@ -127,6 +130,8 @@ export default function App() {
   if (!session) {
     return <SignInScreen />;
   }
+
+  const imageBox = fitBox(IMAGE_BOX_SIZE, IMAGE_BOX_SIZE * 1.4, imageAspect);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -148,14 +153,11 @@ export default function App() {
           </View>
         )}
 
-        <View style={[styles.imageBox, { width: IMAGE_BOX_SIZE, height: IMAGE_BOX_SIZE }]}>
+        <View style={[styles.imageBox, imageUri ? imageBox : { width: IMAGE_BOX_SIZE, height: IMAGE_BOX_SIZE }]}>
           {imageUri && camGrid ? (
-            <BeforeAfterSlider imageUri={imageUri} grid={camGrid} size={IMAGE_BOX_SIZE} />
+            <BeforeAfterSlider key={imageUri} imageUri={imageUri} grid={camGrid} {...imageBox} />
           ) : imageUri ? (
-            <Image
-              source={{ uri: imageUri }}
-              style={{ width: IMAGE_BOX_SIZE, height: IMAGE_BOX_SIZE }}
-            />
+            <Image source={{ uri: imageUri }} style={imageBox} />
           ) : (
             <Text style={styles.imagePlaceholder}>Aucune photo selectionnee</Text>
           )}
@@ -225,6 +227,7 @@ export default function App() {
         visible={compareVisible}
         onClose={() => setCompareVisible(false)}
         imageUri={imageUri}
+        imageAspect={imageAspect}
         grid={camGrid}
       />
     </SafeAreaView>

@@ -1,10 +1,12 @@
 import { apiRequest } from "@/lib/api-client";
-import type { Analysis } from "@/types/parcel";
+import type { Analysis, MobileCapture } from "@/types/parcel";
 
 export type CreateAnalysisContext = {
   missionId?: string;
   missionName?: string;
   profileId?: string;
+  /** false : charge les photos sans lancer l’analyse. */
+  start?: boolean;
 };
 
 export const analysisService = {
@@ -30,11 +32,20 @@ export const analysisService = {
     if (context.missionId?.trim()) formData.append("missionId", context.missionId.trim());
     else if (context.missionName?.trim()) formData.append("missionName", context.missionName.trim());
     if (context.profileId?.trim()) formData.append("profileId", context.profileId.trim());
+    if (context.start === false) formData.append("start", "false");
 
     return apiRequest<Analysis>(`/v1/parcels/${parcelId}/analyses`, {
       method: "POST",
       body: formData,
     });
+  },
+
+  startAnalysis(id: string): Promise<Analysis> {
+    return apiRequest<Analysis>(`/v1/analyses/${id}/start`, { method: "POST" });
+  },
+
+  listMobileCaptures(): Promise<MobileCapture[]> {
+    return apiRequest<MobileCapture[]>("/v1/analyses/mobile");
   },
 
   imageFileUrl(imageId: string): string {

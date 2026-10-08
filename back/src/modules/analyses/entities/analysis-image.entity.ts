@@ -68,6 +68,16 @@ export class AnalysisImage extends RestEntity {
   confidence: number | null;
 
   /**
+   * Verdict calculé sur le téléphone, conservé à côté de celui du serveur
+   * (`result`) pour comparer les deux modèles. Nul pour les autres sources.
+   */
+  @Column({ name: 'mobile_result', type: 'enum', enum: AnalysisResult, nullable: true })
+  mobileResult: AnalysisResult | null;
+
+  @Column({ name: 'mobile_confidence', type: 'float', nullable: true })
+  mobileConfidence: number | null;
+
+  /**
    * Version du modèle ayant produit `result` (colonne posée par
    * 20260826_model_version.sql). Reste nulle tant que l'inférence ONNX n'est
    * pas rétablie sur cette branche, mais la colonne porte des valeurs en

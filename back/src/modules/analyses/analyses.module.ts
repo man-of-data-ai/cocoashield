@@ -11,6 +11,7 @@ import { ConfigService } from '../../libs/infrastructure/config/config.service';
 import { MissionsModule } from '../missions/missions.module';
 import { ParcelsModule } from '../parcels/parcels.module';
 import { PlatformConfigModule } from '../platform-config/platform-config.module';
+import { UsersModule } from '../users/users.module';
 import { IMAGE_INFERENCE_QUEUE } from './analyses.constants';
 import {
   AnalysesController,
@@ -32,6 +33,7 @@ import { AnalysisRepository } from './repositories/analysis.repository';
     ParcelsModule,
     MissionsModule,
     PlatformConfigModule,
+    UsersModule,
     BullModule.registerQueue({ name: IMAGE_INFERENCE_QUEUE }),
     MulterModule.registerAsync({
       imports: [ConfigModule],
