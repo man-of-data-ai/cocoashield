@@ -1,6 +1,7 @@
 import { InjectQueue } from '@nestjs/bullmq';
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -11,6 +12,8 @@ import { MissionsService } from '../missions/missions.service';
 import { ParcelStatus } from '../parcels/entities/parcel.entity';
 import { ParcelsService } from '../parcels/parcels.service';
 import { PlatformConfigService } from '../platform-config/platform-config.service';
+import { UserRole } from '../users/entities/user-profile.entity';
+import { UsersService } from '../users/users.service';
 import { IMAGE_INFERENCE_QUEUE, ImageInferenceJob } from './analyses.constants';
 import { AnalysisImageMeta } from './dtos/create-analysis.dto';
 import {
@@ -40,16 +43,19 @@ export class AnalysesService {
     private readonly platformConfigService: PlatformConfigService,
     @InjectQueue(IMAGE_INFERENCE_QUEUE)
     private readonly imageInferenceQueue: Queue<ImageInferenceJob>,
+    private readonly usersService: UsersService,
   ) {}
 
   async create(
-    parcelId: string,
+    parcelId: string | null,
     ownerId: string,
     files: Express.Multer.File[],
     imageMetas: AnalysisImageMeta[],
     missionId?: string,
     missionName?: string,
     profileId?: string,
+    // Faux : les photos sont chargées, l'analyse attend `start`.
+    start = true,
   ): Promise<Analysis> {
     if (files.length === 0) {
       throw new BadRequestException('At least one image is required');
@@ -61,7 +67,7 @@ export class AnalysesService {
     }
 
     // Access check: the parcel must belong to the caller's organizational scope.
-    const parcel = await this.parcelsService.findOneForOwner(parcelId, ownerId);
+    const parcel = parcelId ? await this.parcelsService.findOneForOwner(parcelId, ownerId) : null;
 
     if (profileId) {
       await this.platformConfigService.getActiveDroneProfile(
@@ -74,24 +80,28 @@ export class AnalysesService {
       ownerId,
       missionId,
     );
-    if (mission?.organizationId && parcel.organizationId && mission.organizationId !== parcel.organizationId) {
+    if (mission?.organizationId && parcel?.organizationId && mission.organizationId !== parcel.organizationId) {
       throw new BadRequestException('La mission et la parcelle doivent appartenir à la même organisation.');
     }
 
     const analysis = await this.analysisRepository.create({
       parcelId,
-      status: AnalysisStatus.PENDING,
+      ownerId,
+      // Posé avant la mise en file : l'inférence peut finaliser l'analyse
+      // dès le premier job traité.
+      status: start ? AnalysisStatus.PROCESSING : AnalysisStatus.PENDING,
       missionId: mission?.id ?? null,
       profileId: profileId ?? null,
     });
+    if (parcelId && start) await this.parcelsService.updateStatus(parcelId, ParcelStatus.ANALYZING);
 
-    let hasPendingImage = false;
-
+    const imageIds: string[] = [];
     for (let index = 0; index < files.length; index += 1) {
       const file = files[index];
       const meta = imageMetas[index];
-      const isPreClassified =
-        meta?.source === AnalysisImageSource.MOBILE && meta.result;
+      // Le verdict du téléphone est gardé à part : le serveur ré-analyse
+      // toujours l'image, et c'est son verdict qui alimente l'analyse.
+      const isMobile = meta?.source === AnalysisImageSource.MOBILE;
       const gps = resolvePosition(await this.imageGeoService.extractGps(file.path), meta);
 
       const geolocationQuality = gps?.geolocationQuality ?? GeolocationQuality.NONE;
@@ -100,11 +110,9 @@ export class AnalysesService {
         analysisId: analysis.id,
         filePath: path.basename(file.path),
         source: meta?.source ?? AnalysisImageSource.UPLOAD,
-        status: isPreClassified
-          ? AnalysisImageStatus.PROCESSED
-          : AnalysisImageStatus.PENDING,
-        result: isPreClassified ? meta.result! : null,
-        confidence: isPreClassified ? (meta.confidence ?? null) : null,
+        status: AnalysisImageStatus.PENDING,
+        mobileResult: isMobile ? (meta.result ?? null) : null,
+        mobileConfidence: isMobile ? (meta.confidence ?? null) : null,
         latitude: gps?.latitude ?? null,
         longitude: gps?.longitude ?? null,
         geolocationQuality,
@@ -116,26 +124,31 @@ export class AnalysesService {
         geolocationPrecisionM: gps?.geolocationPrecisionM ?? null,
       });
 
-      if (!isPreClassified) {
-        hasPendingImage = true;
-        await this.imageInferenceQueue.add('classify', {
-          analysisImageId: image.id,
-        });
+      imageIds.push(image.id);
+    }
+
+    // Toutes les images existent avant le premier job : sinon finalizeIfDone
+    // clôturerait l'analyse sans les images pas encore créées.
+    if (start) {
+      for (const analysisImageId of imageIds) {
+        await this.imageInferenceQueue.add('classify', { analysisImageId });
       }
     }
 
-    await this.parcelsService.updateStatus(parcelId, ParcelStatus.ANALYZING);
-    await this.analysisRepository.update(analysis.id, {
-      status: hasPendingImage
-        ? AnalysisStatus.PROCESSING
-        : AnalysisStatus.PENDING,
-    });
-
-    if (!hasPendingImage) {
-      await this.finalizeIfDone(analysis.id);
-    }
-
     return this.findOne(analysis.id);
+  }
+
+  /** Lance l'analyse d'un lot de photos chargé sans lancement. */
+  async start(id: string, actorId: string): Promise<Analysis> {
+    const analysis = await this.findOneForOwner(id, actorId);
+    if (!(await this.analysisRepository.markStarted(id))) {
+      throw new ConflictException('Cette analyse a déjà été lancée.');
+    }
+    if (analysis.parcelId) await this.parcelsService.updateStatus(analysis.parcelId, ParcelStatus.ANALYZING);
+    for (const image of analysis.images) {
+      await this.imageInferenceQueue.add('classify', { analysisImageId: image.id });
+    }
+    return this.findOne(id);
   }
 
   async createFromCapture(
@@ -159,6 +172,30 @@ export class AnalysesService {
     return this.create(parcelId, userId, files, imageMetas, missionId, missionName, profileId);
   }
 
+  /**
+   * Captures mobiles avec le verdict du téléphone et celui du serveur, dans le
+   * périmètre du compte. La Direction est refusée (vue agrégée uniquement).
+   */
+  async listMobileCaptures(actorId: string) {
+    const scope = await this.usersService.getAccessScope(actorId);
+    const images = scope.isPlatformAdmin
+      ? await this.analysisImageRepository.findRecentMobile()
+      : await this.analysisImageRepository.findRecentMobile({
+          // Refuse la Direction, comme pour toute donnée nominative.
+          parcelIds: (await this.parcelsService.findAllForOwner(actorId)).map((parcel) => parcel.id),
+          authorIds: await this.usersService.visibleUserIdsForActor(actorId),
+        });
+
+    // Noms résolus ici : seuls les admins peuvent lister comptes et organisations.
+    const authors = await this.usersService.identitiesByIds([...new Set(images.map((image) => image.analysis.ownerId).filter((id): id is string => Boolean(id)))]);
+    const organizations = await this.usersService.organizationNamesByIds([...new Set(images.map((image) => image.analysis.parcel?.organizationId).filter((id): id is string => Boolean(id)))]);
+    return images.map((image) => ({
+      ...image,
+      author: image.analysis.ownerId ? authors.get(image.analysis.ownerId) ?? null : null,
+      organizationName: image.analysis.parcel?.organizationId ? organizations.get(image.analysis.parcel.organizationId) ?? null : null,
+    }));
+  }
+
   async findOne(id: string): Promise<Analysis> {
     const analysis = await this.analysisRepository.findById(id);
     if (!analysis) {
@@ -169,8 +206,22 @@ export class AnalysesService {
 
   async findOneForOwner(id: string, ownerId: string): Promise<Analysis> {
     const analysis = await this.findOne(id);
-    await this.parcelsService.findOneForOwner(analysis.parcelId, ownerId);
+    await this.assertCanAccess(analysis, ownerId);
     return analysis;
+  }
+
+  /** Via la parcelle ; sans parcelle, l'auteur, les comptes qui le voient et le super-admin. */
+  private async assertCanAccess(analysis: Pick<Analysis, 'parcelId' | 'ownerId'>, actorId: string): Promise<void> {
+    if (analysis.parcelId) {
+      await this.parcelsService.findOneForOwner(analysis.parcelId, actorId);
+      return;
+    }
+    if (analysis.ownerId === actorId) return;
+    const scope = await this.usersService.getAccessScope(actorId);
+    if (scope.isPlatformAdmin) return;
+    // Même règle que la liste : les captures hors parcelle des comptes visibles.
+    if (scope.role !== UserRole.DIRECTION_CCC && analysis.ownerId && (await this.usersService.visibleUserIdsForActor(actorId)).includes(analysis.ownerId)) return;
+    throw new NotFoundException('Analysis not found');
   }
 
   async updateNotes(
@@ -193,7 +244,7 @@ export class AnalysesService {
   ): Promise<{ absolutePath: string; filename: string }> {
     const image = await this.analysisImageRepository.findByIdWithOwner(imageId);
     if (!image) throw new NotFoundException('Image not found');
-    await this.parcelsService.findOneForOwner(image.analysis.parcelId, ownerId);
+    await this.assertCanAccess(image.analysis, ownerId);
 
     return {
       absolutePath: path.join(this.configService.uploadsDir, image.filePath),
@@ -207,14 +258,17 @@ export class AnalysesService {
     const stillPending = analysis.images.some((image: AnalysisImage) => image.status === AnalysisImageStatus.PENDING);
     if (stillPending) return;
 
-    const settings = await this.platformConfigService.getSettings(analysis.parcel.ownerId);
+    // Une analyse sans parcelle a toujours un auteur (owner_id posé à la création).
+    const settings = await this.platformConfigService.getSettings(analysis.parcel?.ownerId ?? analysis.ownerId!);
     const processedRaw = analysis.images.filter((image: AnalysisImage) => image.status === AnalysisImageStatus.PROCESSED && image.result !== null);
     const processed = this.deduplicate(processedRaw, settings.dedupDistanceM, settings.dedupWindowS);
     const infected = processed.filter((image) => image.result === AnalysisResult.INFECTED);
     const infectionPercentage = processed.length > 0 ? (infected.length / processed.length) * 100 : 0;
     const infectionRate = infectionPercentage / 100;
     const severityLevel = this.severityLevel(infectionRate, settings);
-    const previous = (await this.analysisRepository.findCompletedByParcel(analysis.parcelId)).find((item) => item.id !== analysisId) ?? null;
+    const previous = analysis.parcelId
+      ? (await this.analysisRepository.findCompletedByParcel(analysis.parcelId)).find((item) => item.id !== analysisId) ?? null
+      : null;
     const affectedZones = this.buildZones(processed, infected, settings.clusteringRadiusM, settings.minImagesPerZone, settings, previous);
     const isInfected = infected.length > 0;
     const completedAt = new Date();
@@ -228,7 +282,9 @@ export class AnalysesService {
       affectedZones,
       reportGeneratedAt: completedAt,
     });
-    await this.parcelsService.updateStatus(analysis.parcelId, isInfected ? ParcelStatus.SICK : ParcelStatus.HEALTHY);
+    if (analysis.parcelId) {
+      await this.parcelsService.updateStatus(analysis.parcelId, isInfected ? ParcelStatus.SICK : ParcelStatus.HEALTHY);
+    }
   }
 
   private severityLevel(rate: number, settings: { severityModerate: number; severityHigh: number; severityCritical: number }): 'faible'|'modere'|'eleve'|'critique' {

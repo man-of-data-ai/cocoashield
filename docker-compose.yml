@@ -49,6 +49,7 @@ services:
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET est obligatoire}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
       WEB_URL: ${WEB_URL:-http://localhost:3002}
+      TRUSTED_ORIGINS: ${TRUSTED_ORIGINS:-}
       UPLOADS_DIR: /app/uploads
     volumes:
       - uploads_data:/app/uploads

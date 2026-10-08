@@ -1,4 +1,4 @@
-import { IsEnum, IsIn, IsNumber, IsString, IsUrl } from 'class-validator';
+import { IsEnum, IsIn, IsNumber, IsOptional, IsString, IsUrl } from 'class-validator';
 
 export enum Environment {
   PRODUCTION = 'production',
@@ -46,6 +46,12 @@ export class ConfigSchema {
   @IsUrl({ require_tld: false })
   WEB_URL: string = 'http://localhost:3002';
 
+  // Origines web supplémentaires, séparées par des virgules : l'application
+  // ouverte à une autre adresse que WEB_URL (IP locale, tunnel ngrok...).
+  @IsOptional()
+  @IsString()
+  TRUSTED_ORIGINS?: string;
+
   @IsString()
   MOBILE_APP_SCHEME: string = 'cocoashield';
 
@@ -60,8 +66,9 @@ export class ConfigSchema {
   @IsString()
   UPLOADS_DIR: string = './uploads';
 
+  // Sans valeur par défaut : un serveur sans modèle ne doit pas démarrer.
   @IsString()
-  MODEL_PATH: string = '../model/v3/cocoashield_v3.onnx';
+  MODEL_PATH: string;
 
   @IsString()
   MODEL_VERSION: string = 'v3';

@@ -43,6 +43,7 @@ services:
     environment:
       NODE_ENV: development
       WATCHPACK_POLLING: "true"
+      ALLOWED_DEV_ORIGINS: ${ALLOWED_DEV_ORIGINS:-}
     ports:
       - "3002:3002"
     volumes:

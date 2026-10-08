@@ -1,8 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { AuthService } from '@thallesp/nestjs-better-auth';
 import { DataSource } from 'typeorm';
-import * as fs from 'fs';
-import * as path from 'path';
 
 import { AppModule } from '../src/app.module';
 import type { Auth } from '../src/modules/auth/auth.provider';
@@ -13,21 +11,9 @@ import {
 } from '../src/modules/users/entities/user-profile.entity';
 import {
   Parcel,
-  ParcelStatus,
   TerrainVerificationStatus,
 } from '../src/modules/parcels/entities/parcel.entity';
 import { Mission } from '../src/modules/missions/entities/mission.entity';
-import {
-  Analysis,
-  AnalysisStatus,
-} from '../src/modules/analyses/entities/analysis.entity';
-import {
-  AnalysisImage,
-  AnalysisImageSource,
-  AnalysisImageStatus,
-  GeolocationQuality,
-} from '../src/modules/analyses/entities/analysis-image.entity';
-import { AnalysisResult } from '../src/modules/analyses/entities/analysis-result.enum';
 import { PlatformSettings } from '../src/modules/platform-config/entities/platform-settings.entity';
 import { DroneProfile } from '../src/modules/platform-config/entities/drone-profile.entity';
 import {
@@ -45,11 +31,6 @@ const DEMO_USERS = [
   { email: 'agronome@ccc.ci', username: 'Agronome.CCC', role: UserRole.AGRONOME_TERRAIN, cooperative: 'Conseil du Café-Cacao', kind: 'onprem' },
   { email: 'direction@ccc.ci', username: 'Direction.CCC', role: UserRole.DIRECTION_CCC, cooperative: 'Conseil du Café-Cacao', kind: 'onprem' },
 ] as const;
-
-const demoPng = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
-  'base64',
-);
 
 async function ensureUser(
   auth: Auth,
@@ -100,8 +81,6 @@ async function seedOwner(
 ) {
   const parcelRepo = dataSource.getRepository(Parcel);
   const missionRepo = dataSource.getRepository(Mission);
-  const analysisRepo = dataSource.getRepository(Analysis);
-  const imageRepo = dataSource.getRepository(AnalysisImage);
   const settingsRepo = dataSource.getRepository(PlatformSettings);
   const droneRepo = dataSource.getRepository(DroneProfile);
   const exportRepo = dataSource.getRepository(ExportRecord);
@@ -154,7 +133,6 @@ async function seedOwner(
       organizationId,
       name: 'Plantation Akouédo A-12',
       boundary: square(baseLng, baseLat),
-      status: ParcelStatus.SICK,
       terrainVerificationStatus: TerrainVerificationStatus.VERIFIED,
       terrainVerificationComment:
         'Présence de symptômes confirmée sur la bordure est.',
@@ -165,7 +143,6 @@ async function seedOwner(
       organizationId,
       name: 'Parcelle Nawa B-07',
       boundary: square(baseLng + 0.012, baseLat + 0.008, 0.006),
-      status: ParcelStatus.HEALTHY,
       terrainVerificationStatus: TerrainVerificationStatus.VERIFIED,
       terrainVerificationComment: 'Parcelle saine lors du dernier passage.',
       terrainVerifiedAt: new Date(now - 7 * 86400000),
@@ -175,139 +152,14 @@ async function seedOwner(
       organizationId,
       name: 'Bloc Méagui C-04',
       boundary: square(baseLng - 0.011, baseLat + 0.016, 0.008),
-      status: ParcelStatus.ANALYZING,
       terrainVerificationStatus: TerrainVerificationStatus.PENDING,
       terrainVerificationComment: null,
       terrainVerifiedAt: null,
     }),
   ]);
 
-  const uploadDir = path.resolve(
-    process.cwd(),
-    process.env.UPLOADS_DIR || './uploads',
-  );
-  fs.mkdirSync(uploadDir, { recursive: true });
-
-  const specs = [
-    {
-      parcel: parcels[0],
-      mission: mission1,
-      status: AnalysisStatus.COMPLETED,
-      result: AnalysisResult.INFECTED,
-      days: 2,
-      infected: 4,
-      healthy: 2,
-      notes:
-        'Foyer localisé sur la bordure est. Contrôle recommandé sous 7 jours.',
-    },
-    {
-      parcel: parcels[1],
-      mission: mission2,
-      status: AnalysisStatus.COMPLETED,
-      result: AnalysisResult.HEALTHY,
-      days: 9,
-      infected: 0,
-      healthy: 5,
-      notes: 'Couvert végétal homogène. Aucun symptôme critique observé.',
-    },
-    {
-      parcel: parcels[2],
-      mission: mission1,
-      status: AnalysisStatus.PROCESSING,
-      result: null,
-      days: 1,
-      infected: 1,
-      healthy: 2,
-      notes: 'Images en cours de traitement. Observation terrain à confirmer.',
-    },
-    {
-      parcel: parcels[0],
-      mission: mission3,
-      status: AnalysisStatus.COMPLETED,
-      result: AnalysisResult.HEALTHY,
-      days: 45,
-      infected: 0,
-      healthy: 4,
-      notes: 'État de référence avant apparition du foyer actuel.',
-    },
-  ];
-
-  for (let s = 0; s < specs.length; s += 1) {
-    const spec = specs[s];
-    const createdAt = new Date(now - spec.days * 86400000);
-    const [originLng, originLat] = spec.parcel.boundary.coordinates[0][0];
-    const total = spec.infected + spec.healthy;
-    const infectionPercentage = total > 0 ? (spec.infected / total) * 100 : 0;
-    const severityLevel =
-      infectionPercentage >= 40
-        ? 'critique'
-        : infectionPercentage >= 25
-          ? 'eleve'
-          : infectionPercentage >= 10
-            ? 'modere'
-            : 'faible';
-    const completedAt =
-      spec.status === AnalysisStatus.COMPLETED
-        ? new Date(createdAt.getTime() + 45 * 60000)
-        : null;
-    const affectedZones =
-      spec.status === AnalysisStatus.COMPLETED
-        ? Array.from({ length: spec.infected }, (_, i) => ({
-            latitude: originLat + 0.002 + i * 0.0004,
-            longitude: originLng + 0.002 + i * 0.0004,
-            severity: Math.max(0.35, 0.9 - i * 0.08),
-          }))
-        : null;
-    const analysis = await analysisRepo.save(
-      analysisRepo.create({
-        parcelId: spec.parcel.id,
-        missionId: spec.mission.id,
-        profileId: s % 2 === 0 ? 'DJI-M3M-RTK' : null,
-        status: spec.status,
-        result: spec.result,
-        notes: spec.notes,
-        completedAt,
-        infectionPercentage:
-          spec.status === AnalysisStatus.COMPLETED ? infectionPercentage : null,
-        severityLevel:
-          spec.status === AnalysisStatus.COMPLETED ? severityLevel : null,
-        affectedZones,
-        reportGeneratedAt: completedAt,
-        createdAt,
-      }),
-    );
-    const imageCount = spec.infected + spec.healthy;
-    for (let i = 0; i < imageCount; i += 1) {
-      const infected = i < spec.infected;
-      const filename = `demo-${user.id.slice(0, 6)}-${s}-${i}.png`;
-      fs.writeFileSync(path.join(uploadDir, filename), demoPng);
-      await imageRepo.save(
-        imageRepo.create({
-          analysisId: analysis.id,
-          filePath: filename,
-          source: AnalysisImageSource.MOBILE,
-          status:
-            spec.status === AnalysisStatus.PROCESSING && i === imageCount - 1
-              ? AnalysisImageStatus.PENDING
-              : AnalysisImageStatus.PROCESSED,
-          result:
-            spec.status === AnalysisStatus.PROCESSING && i === imageCount - 1
-              ? null
-              : infected
-                ? AnalysisResult.INFECTED
-                : AnalysisResult.HEALTHY,
-          confidence: infected ? 0.91 - i * 0.02 : 0.94 - i * 0.01,
-          latitude: originLat + 0.002 + i * 0.0004,
-          longitude: originLng + 0.002 + i * 0.0004,
-          geolocationQuality:
-            i % 3 === 0
-              ? GeolocationQuality.PRECISE
-              : GeolocationQuality.APPROXIMATE,
-        }),
-      );
-    }
-  }
-
+  // Aucune analyse ni image ici : un verdict n'existe que s'il sort du modèle.
+  // Les parcelles restent « non analysées » jusqu'au premier envoi d'images.
   await settingsRepo.save(
     settingsRepo.create({
       ownerId: configOwnerId,

@@ -22,13 +22,21 @@ export { AnalysisResult };
 
 @Entity('analysis')
 export class Analysis extends RestEntity {
+  /** Nulle pour une capture prise hors de toute parcelle : elle est gardée quand même. */
   @Index()
-  @Column({ name: 'parcel_id' })
-  parcelId: string;
+  @Column({ name: 'parcel_id', nullable: true })
+  parcelId: string | null;
 
-  @ManyToOne(() => Parcel, (parcel) => parcel.analyses, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Parcel, (parcel) => parcel.analyses, { onDelete: 'CASCADE', nullable: true })
   @JoinColumn({ name: 'parcel_id' })
-  parcel: Parcel;
+  parcel: Parcel | null;
+
+  /**
+   * Compte qui a envoyé les images. C'est lui qui donne l'accès et les réglages
+   * quand l'analyse n'a pas de parcelle. Nul sur les analyses antérieures.
+   */
+  @Column({ name: 'owner_id', type: 'varchar', nullable: true })
+  ownerId: string | null;
 
   @Column({
     type: 'enum',
