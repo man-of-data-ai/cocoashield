@@ -7,10 +7,11 @@ import Dialog from "@/components/ui/Dialog";
 import ModernSelect from "@/components/ui/ModernSelect";
 import Alert from "@/components/ui/Alert";
 import Spinner from "@/components/ui/Spinner";
-import { analysisService } from "@/services/analysis-service";
+import { analysisService, PartialUploadError } from "@/services/analysis-service";
 import { configurationService } from "@/services/configuration-service";
 import { missionService } from "@/services/mission-service";
 import { ApiError } from "@/lib/api-client";
+import { formatBytes, screenImages, type RejectedImage, type UploadLimits } from "@/lib/image-upload";
 import type { Analysis, Mission } from "@/types/parcel";
 import type { DroneProfile } from "@/types/configuration";
 
@@ -27,9 +28,15 @@ export default function NewAnalysisDialog({ open, onClose, parcelId, parcelName,
   const [profiles,setProfiles]=useState<DroneProfile[]>([]);
   const [submitting,setSubmitting]=useState(false);
   const [error,setError]=useState<string|null>(null);
+  const [limits,setLimits]=useState<UploadLimits|null>(null);
+  const [rejected,setRejected]=useState<RejectedImage[]>([]);
+  const [progress,setProgress]=useState<{sent:number;total:number}|null>(null);
+  // Analyse créée avant l’échec d’un lot : remontée au parent à la fermeture.
+  const [partial,setPartial]=useState<Analysis|null>(null);
 
   useEffect(()=>{
     if (!open) return;
+    analysisService.getUploadLimits().then(setLimits).catch(()=>setError("Impossible de récupérer les limites d’envoi des photos. Réessayez dans un instant."));
     Promise.allSettled([configurationService.listDroneProfiles(true), missionService.listMissions()]).then(([profilesResult,missionsResult])=>{
       setProfiles(profilesResult.status === "fulfilled" ? profilesResult.value : []);
       if (missionsResult.status === "fulfilled") {
@@ -42,25 +49,52 @@ export default function NewAnalysisDialog({ open, onClose, parcelId, parcelName,
   const previews=useMemo<Preview[]>(()=>images.map((file)=>({file,url:URL.createObjectURL(file)})),[images]);
   useEffect(()=>()=>previews.forEach((p)=>URL.revokeObjectURL(p.url)),[previews]);
 
-  function close(){setImages([]);setMissionName("");setProfileId("");setError(null);onClose();}
-  function addFiles(files: FileList|null){if(!files)return; setImages((current)=>[...current,...Array.from(files).filter((f)=>f.type.startsWith("image/"))]);}
+  // Une analyse créée par un envoi interrompu est remontée au parent même si l’on abandonne.
+  function close(){if(partial)onAnalysisCreated(partial);reset();}
+  function reset(){setImages([]);setMissionName("");setProfileId("");setError(null);setRejected([]);setProgress(null);setPartial(null);onClose();}
+  function addFiles(files: FileList|null){
+    if(!files||!limits)return;
+    const {accepted,rejected:refused}=screenImages(Array.from(files),limits);
+    setRejected(refused);
+    setImages((current)=>[...current,...accepted]);
+  }
   function removeAt(index:number){setImages((current)=>current.filter((_,i)=>i!==index));}
 
   // start=false : les photos sont chargées, l’analyse sera lancée plus tard.
   async function submit(start: boolean){
+    if(!limits){setError("Les limites d’envoi des photos ne sont pas encore chargées.");return;}
+    if(images.length===0&&partial){
+      // Toutes les photos sont déjà chargées : il ne reste qu’à lancer.
+      if(!start){close();return;}
+      setSubmitting(true);setError(null);
+      try{const analysis=await analysisService.startAnalysis(partial.id);onAnalysisCreated(analysis);reset();}
+      catch(e){setError(e instanceof ApiError?e.message:"Impossible de lancer l’analyse.");}finally{setSubmitting(false);}
+      return;
+    }
     if(images.length===0){setError("Ajoutez au moins une photo de feuille.");return;}
     if(!fixedMissionId && missionMode === "existing" && !missionId){setError("Sélectionnez la mission correspondant à cette collecte terrain.");return;}
     if(!fixedMissionId && missionMode === "new" && !missionName.trim()){setError("Donnez un nom à la mission de collecte.");return;}
-    setSubmitting(true);setError(null);
+    setSubmitting(true);setError(null);setProgress({sent:0,total:images.length});
     try{
-      const analysis=await analysisService.createAnalysis(parcelId,images,{
+      const analysis=await analysisService.createAnalysis(parcelId,images,limits,{
         missionId: fixedMissionId || (missionMode === "existing" ? missionId : undefined),
         missionName: fixedMissionId ? undefined : (missionMode === "new" ? missionName : undefined),
         profileId: fixedDroneProfileId || profileId,
         start,
+        existing: partial ?? undefined,
+        onProgress:(sent,total)=>setProgress({sent,total}),
       });
-      onAnalysisCreated(analysis);close();
-    }catch(e){setError(e instanceof ApiError?e.message:"Impossible d’envoyer les photos.");}finally{setSubmitting(false);}
+      onAnalysisCreated(analysis);reset();
+    }catch(e){
+      if(e instanceof PartialUploadError){
+        // Les photos déjà envoyées sont gardées : on ne renvoie que le reste.
+        setPartial(e.analysis);setImages((current)=>current.slice(e.sent));
+        const reason=e.failure instanceof ApiError?` (${e.failure.message})`:"";
+        setError(e.sent===e.total
+          ? `Les photos sont chargées mais l’analyse n’a pas pu être lancée${reason}. Réessayez, ou lancez-la plus tard depuis la parcelle.`
+          : `Envoi interrompu${reason} : ${e.message} Réessayez pour envoyer les photos restantes dans la même analyse.`);
+      }else setError(e instanceof ApiError?e.message:"Impossible d’envoyer les photos.");
+    }finally{setSubmitting(false);setProgress(null);}
   }
 
   const withMission = Boolean(fixedMissionId) || missionMode !== "none";
@@ -75,9 +109,10 @@ export default function NewAnalysisDialog({ open, onClose, parcelId, parcelName,
 
     {!fixedDroneProfileId && <div><label className="mb-1.5 block text-xs font-bold text-slate-600">Profil de drone / détection</label><ModernSelect value={profileId} onChange={setProfileId} options={[{value:"",label:"Détection standard"},...profiles.map((p)=>({value:p.profileId,label:p.profileId,description:`${p.manufacturer} ${p.model}`}))]}/></div>}
 
-    <label className="flex min-h-32 cursor-pointer flex-col items-center justify-center rounded-3xl border border-dashed border-[#BFD1B5] bg-[#FBFDF9] px-5 py-6 text-center transition hover:border-[#7FA064] hover:bg-[#F7FAF4]"><ImagePlus className="h-7 w-7 text-[#668A4C]"/><span className="mt-2 text-sm font-bold text-slate-800">Ajouter les photos de l’analyse</span><span className="mt-1 text-xs text-slate-400">Les coordonnées GPS présentes dans les fichiers seront conservées</span><input type="file" accept="image/*" multiple className="hidden" onChange={(e)=>addFiles(e.target.files)}/></label>
+    <label className="flex min-h-32 cursor-pointer flex-col items-center justify-center rounded-3xl border border-dashed border-[#BFD1B5] bg-[#FBFDF9] px-5 py-6 text-center transition hover:border-[#7FA064] hover:bg-[#F7FAF4]"><ImagePlus className="h-7 w-7 text-[#668A4C]"/><span className="mt-2 text-sm font-bold text-slate-800">Ajouter les photos de l’analyse</span><span className="mt-1 text-xs text-slate-400">Les coordonnées GPS présentes dans les fichiers seront conservées</span>{limits&&<span className="mt-1 text-xs text-slate-400">JPEG, PNG, WebP ou TIFF · {formatBytes(limits.maxImageSizeBytes)} max par photo · nombre de photos illimité</span>}<input type="file" accept={limits?.acceptedMimeTypes.join(",")??"image/*"} multiple disabled={!limits||submitting||Boolean(partial)} className="hidden" onChange={(e)=>{addFiles(e.target.files);e.target.value="";}}/></label>
+    {rejected.length>0&&<Alert variant="error"><p className="font-semibold">{rejected.length} fichier{rejected.length>1?"s":""} non ajouté{rejected.length>1?"s":""} :</p><ul className="mt-1 list-disc space-y-0.5 pl-5 text-xs">{rejected.slice(0,8).map((r,i)=><li key={`${r.name}-${i}`}><span className="font-semibold">{r.name}</span> : {r.reason}</li>)}{rejected.length>8&&<li>et {rejected.length-8} autre{rejected.length-8>1?"s":""}</li>}</ul></Alert>}
     {previews.length>0&&<div><div className="mb-2 flex items-center justify-between"><p className="text-xs font-bold uppercase tracking-wider text-slate-400">Aperçu</p><span className="rounded-full bg-[#EDF5E8] px-2.5 py-1 text-[11px] font-bold text-[#56773F]">{previews.length} photo{previews.length>1?"s":""}</span></div><div className="grid grid-cols-2 gap-3 sm:grid-cols-3">{previews.map((preview,index)=><div key={`${preview.file.name}-${index}`} className="group relative overflow-hidden rounded-2xl border border-[#E1E8DD] bg-white"><Image src={preview.url} alt={preview.file.name} width={240} height={112} unoptimized className="h-28 w-full object-cover"/><button type="button" onClick={()=>removeAt(index)} className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-white/95 text-slate-600 shadow"><X className="h-3.5 w-3.5"/></button><p className="truncate px-2.5 py-2 text-[10px] font-semibold text-slate-500">{preview.file.name}</p></div>)}</div></div>}
     {error&&<Alert variant="error">{error}</Alert>}
-    <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button type="button" onClick={close} disabled={submitting} className="rounded-2xl border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">Annuler</button><button type="button" onClick={()=>submit(false)} disabled={submitting} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[#D9E5D3] px-5 py-2.5 text-sm font-bold text-[#31583B] hover:bg-[#F6FAF3] disabled:opacity-60"><Upload className="h-4 w-4"/>Charger sans lancer</button><button type="button" onClick={()=>submit(true)} disabled={submitting} className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#244B32] px-6 py-2.5 text-sm font-bold text-white hover:bg-[#356A46] disabled:opacity-60">{submitting?<Spinner label="Envoi des photos..."/>:<><Camera className="h-4 w-4"/>Lancer l’analyse</>}</button></div>
+    <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button type="button" onClick={close} disabled={submitting} className="rounded-2xl border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">Annuler</button><button type="button" onClick={()=>submit(false)} disabled={submitting} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[#D9E5D3] px-5 py-2.5 text-sm font-bold text-[#31583B] hover:bg-[#F6FAF3] disabled:opacity-60"><Upload className="h-4 w-4"/>Charger sans lancer</button><button type="button" onClick={()=>submit(true)} disabled={submitting} className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#244B32] px-6 py-2.5 text-sm font-bold text-white hover:bg-[#356A46] disabled:opacity-60">{submitting?<Spinner label={progress&&progress.total>0?`Envoi des photos… ${progress.sent}/${progress.total}`:"Envoi des photos..."}/>:<><Camera className="h-4 w-4"/>Lancer l’analyse</>}</button></div>
   </div></Dialog>;
 }

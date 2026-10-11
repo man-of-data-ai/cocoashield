@@ -31,6 +31,20 @@ import { ImageGeoService, resolvePosition } from './image-geo.service';
 import { AnalysisImageRepository } from './repositories/analysis-image.repository';
 import { AnalysisRepository } from './repositories/analysis.repository';
 
+function assertImages(
+  files: Express.Multer.File[] | undefined,
+  imageMetas: AnalysisImageMeta[],
+): asserts files is Express.Multer.File[] {
+  if (!files || files.length === 0) {
+    throw new BadRequestException('At least one image is required');
+  }
+  if (imageMetas.length !== 0 && imageMetas.length !== files.length) {
+    throw new BadRequestException(
+      'results must either be omitted or match the number of images',
+    );
+  }
+}
+
 @Injectable()
 export class AnalysesService {
   constructor(
@@ -57,14 +71,7 @@ export class AnalysesService {
     // Faux : les photos sont chargées, l'analyse attend `start`.
     start = true,
   ): Promise<Analysis> {
-    if (files.length === 0) {
-      throw new BadRequestException('At least one image is required');
-    }
-    if (imageMetas.length !== 0 && imageMetas.length !== files.length) {
-      throw new BadRequestException(
-        'results must either be omitted or match the number of images',
-      );
-    }
+    assertImages(files, imageMetas);
 
     // Access check: the parcel must belong to the caller's organizational scope.
     const parcel = parcelId ? await this.parcelsService.findOneForOwner(parcelId, ownerId) : null;
@@ -95,6 +102,43 @@ export class AnalysesService {
     });
     if (parcelId && start) await this.parcelsService.updateStatus(parcelId, ParcelStatus.ANALYZING);
 
+    const imageIds = await this.createImages(analysis.id, files, imageMetas);
+
+    // Toutes les images existent avant le premier job : sinon finalizeIfDone
+    // clôturerait l'analyse sans les images pas encore créées.
+    if (start) {
+      for (const analysisImageId of imageIds) {
+        await this.imageInferenceQueue.add('classify', { analysisImageId });
+      }
+    }
+
+    return this.findOne(analysis.id);
+  }
+
+  /**
+   * Ajoute un lot de photos à une analyse pas encore lancée : le web découpe
+   * un grand envoi en plusieurs requêtes, puis lance l'analyse.
+   */
+  async addImages(
+    id: string,
+    actorId: string,
+    files: Express.Multer.File[],
+    imageMetas: AnalysisImageMeta[],
+  ): Promise<Analysis> {
+    assertImages(files, imageMetas);
+    const analysis = await this.findOneForOwner(id, actorId);
+    if (analysis.status !== AnalysisStatus.PENDING) {
+      throw new ConflictException('Cette analyse a déjà été lancée : impossible d’y ajouter des photos.');
+    }
+    await this.createImages(id, files, imageMetas);
+    return this.findOne(id);
+  }
+
+  private async createImages(
+    analysisId: string,
+    files: Express.Multer.File[],
+    imageMetas: AnalysisImageMeta[],
+  ): Promise<string[]> {
     const imageIds: string[] = [];
     for (let index = 0; index < files.length; index += 1) {
       const file = files[index];
@@ -107,7 +151,7 @@ export class AnalysesService {
       const geolocationQuality = gps?.geolocationQuality ?? GeolocationQuality.NONE;
 
       const image = await this.analysisImageRepository.create({
-        analysisId: analysis.id,
+        analysisId,
         filePath: path.basename(file.path),
         source: meta?.source ?? AnalysisImageSource.UPLOAD,
         status: AnalysisImageStatus.PENDING,
@@ -126,16 +170,7 @@ export class AnalysesService {
 
       imageIds.push(image.id);
     }
-
-    // Toutes les images existent avant le premier job : sinon finalizeIfDone
-    // clôturerait l'analyse sans les images pas encore créées.
-    if (start) {
-      for (const analysisImageId of imageIds) {
-        await this.imageInferenceQueue.add('classify', { analysisImageId });
-      }
-    }
-
-    return this.findOne(analysis.id);
+    return imageIds;
   }
 
   /** Lance l'analyse d'un lot de photos chargé sans lancement. */
