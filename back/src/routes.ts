@@ -27,8 +27,10 @@ const parcels = {
 const analyses = {
   root: '/analyses',
   mobile: '/mobile',
+  uploadLimits: '/upload-limits',
   byId: '/:id',
   start: '/:id/start',
+  images: '/:id/images',
 };
 
 const analysisImages = {

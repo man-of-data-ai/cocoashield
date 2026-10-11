@@ -170,3 +170,46 @@ describe('AnalysesService loading photos before starting', () => {
     expect(queue.add).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('AnalysesService.addImages', () => {
+  function buildPending(status: string) {
+    const imageRepo = { create: jest.fn().mockResolvedValue({ id: 'img2' }) };
+    const queue = { add: jest.fn() };
+    const service = new AnalysesService(
+      null as never,
+      imageRepo as never,
+      null as never,
+      { extractGps: jest.fn().mockResolvedValue(null) } as never,
+      null as never,
+      null as never,
+      null as never,
+      queue as never,
+      null as never,
+    );
+    jest.spyOn(service, 'findOneForOwner').mockResolvedValue({ id: 'a1', status } as never);
+    jest.spyOn(service, 'findOne').mockResolvedValue({ id: 'a1' } as never);
+    return { service, imageRepo, queue };
+  }
+
+  it('adds the batch to a pending analysis without queuing it', async () => {
+    const { service, imageRepo, queue } = buildPending('pending');
+
+    await service.addImages('a1', 'u1', FILES, []);
+
+    expect(imageRepo.create).toHaveBeenCalledWith(expect.objectContaining({ analysisId: 'a1', status: 'pending' }));
+    expect(queue.add).not.toHaveBeenCalled();
+  });
+
+  it('refuses photos once the analysis has started', async () => {
+    const { service, imageRepo } = buildPending('processing');
+
+    await expect(service.addImages('a1', 'u1', FILES, [])).rejects.toThrow('Cette analyse a déjà été lancée');
+    expect(imageRepo.create).not.toHaveBeenCalled();
+  });
+
+  it('refuses an empty batch', async () => {
+    const { service } = buildPending('pending');
+
+    await expect(service.addImages('a1', 'u1', [] as never, [])).rejects.toThrow('At least one image is required');
+  });
+});

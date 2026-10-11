@@ -18,6 +18,7 @@ import { routes } from '../../routes';
 import { AnalysesService } from './analyses.service';
 import { AnalysisImageMeta } from './dtos/create-analysis.dto';
 import { UpdateAnalysisNotesDto } from './dtos/update-analysis-notes.dto';
+import { UPLOAD_LIMITS } from './upload-limits';
 
 function parseImageMetas(resultsJson?: string): AnalysisImageMeta[] {
   if (!resultsJson) {
@@ -89,7 +90,12 @@ export class AnalysesController {
     );
   }
 
-  // Déclarée avant `:id`, sinon « mobile » serait lu comme un identifiant.
+  // Déclarées avant `:id`, sinon « mobile » serait lu comme un identifiant.
+  @Get(routes.analyses.uploadLimits)
+  uploadLimits() {
+    return UPLOAD_LIMITS;
+  }
+
   @Get(routes.analyses.mobile)
   listMobile(@Session() session: UserSession) {
     return this.analysesService.listMobileCaptures(session.user.id);
@@ -103,6 +109,23 @@ export class AnalysesController {
   @Post(routes.analyses.start)
   start(@Session() session: UserSession, @Param('id') id: string) {
     return this.analysesService.start(id, session.user.id);
+  }
+
+  /** Ajoute un lot de photos à une analyse chargée mais pas encore lancée. */
+  @Post(routes.analyses.images)
+  @UseInterceptors(FilesInterceptor('images'))
+  addImages(
+    @Session() session: UserSession,
+    @Param('id') id: string,
+    @UploadedFiles() images: Express.Multer.File[],
+    @Body('results') resultsJson?: string,
+  ) {
+    return this.analysesService.addImages(
+      id,
+      session.user.id,
+      images,
+      parseImageMetas(resultsJson),
+    );
   }
 
   @Patch(routes.analyses.byId)

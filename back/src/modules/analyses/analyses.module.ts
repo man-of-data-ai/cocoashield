@@ -24,6 +24,7 @@ import { Analysis } from './entities/analysis.entity';
 import { ImageGeoService } from './image-geo.service';
 import { ImageInferenceProcessor } from './image-inference.processor';
 import { ImageInferenceService } from './image-inference.service';
+import { imageUploadOptions } from './upload-limits';
 import { AnalysisImageRepository } from './repositories/analysis-image.repository';
 import { AnalysisRepository } from './repositories/analysis.repository';
 
@@ -41,6 +42,7 @@ import { AnalysisRepository } from './repositories/analysis.repository';
       useFactory: (config: ConfigService) => {
         fs.mkdirSync(config.uploadsDir, { recursive: true });
         return {
+          ...imageUploadOptions,
           storage: diskStorage({
             destination: config.uploadsDir,
             filename: (_req, file, callback) => {
